@@ -106,9 +106,17 @@ class SPMFitter():
 
 
 if __name__ == '__main__':
+    # TODO:
+    # - Find good way to read user input regarding positions to fit
+    # - Calculate surface roughness of subsets of surface
+    # - Plot residuals of fits
+    # - plot fit-trends (amplitude, frequency, etc) as function of line number
+    
+    
     FITTER = SPMFitter('F1.002.gwy')
 
-    FITTER.fit_line(300)
+    for l in range(250, 360):
+        FITTER.fit_line(l)
 
     # Z = FITTER.plane_fit()
     # FITTER.data = FITTER.data - Z
