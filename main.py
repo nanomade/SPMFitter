@@ -4,7 +4,7 @@ import scipy as sp
 import matplotlib.pyplot as plt
 
 from matplotlib.widgets import Button, RectangleSelector
-
+from matplotlib.patches import Rectangle
 
 class SPMFitter:
     def __init__(self, filename):
@@ -183,11 +183,19 @@ class SPMFitter:
         def mark_pattern(event):
             print('Mark pattern: {}'.format(self.latest_select))
             self.patterend_region = self.latest_select
-
+            width = self.patterend_region[1][0] - self.patterend_region[0][0]
+            height = self.patterend_region[1][1] - self.patterend_region[0][1]
+            pattern_rect.set_xy(self.patterend_region[0])
+            pattern_rect.set_width(width)
+            pattern_rect.set_height(height)
+            
         def mark_modulated(event):
             print('Mark modulated: {}'.format(self.latest_select))
             self.modulated_region = self.latest_select
 
+        def show_boxes(event):
+            pattern_rect.set_visible(not pattern_rect.get_visible())
+            fig.canvas.draw()
         fig, ax = plt.subplots()
 
         ax.imshow(
@@ -208,15 +216,27 @@ class SPMFitter:
             interactive=True,
         )
 
+        # marked_example = (4.037105588452997, 1.865653663952628), (10.372368356772759, 9.321770614359732)
+
+        start = (1.096893893412286, 0.6798224278312359)
+        width = 10.372368356772759 - start[0]
+        height = 9.321770614359732 - start[1]
+        
+
+        pattern_rect = Rectangle((0, 0), 1, 1, linewidth=1, edgecolor='k',facecolor='r', alpha=0.6, visible=False)
+        ax.add_patch(pattern_rect)
+        
         ax_set_pattern = fig.add_axes([0.82, 0.8, 0.1, 0.025])
         ax_set_modulated = fig.add_axes([0.82, 0.75, 0.1, 0.025])
+        ax_show_boxes = fig.add_axes([0.82, 0.7, 0.1, 0.025])
         b_pattern = Button(ax_set_pattern, 'Mark pattern')
         b_pattern.on_clicked(mark_pattern)
         b_modulated = Button(ax_set_modulated, 'Mark modulated')
         b_modulated.on_clicked(mark_modulated)
-
+        b_show_boxes = Button(ax_show_boxes, 'Show marked')
+        b_show_boxes.on_clicked(show_boxes)
         plt.show()
-
+        
 
 if __name__ == "__main__":
     # TODO:
