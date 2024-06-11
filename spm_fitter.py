@@ -51,15 +51,41 @@ class SPMFitter:
     #     )
     #     plt.show()
 
+    def _find_sub_area(self, area, debug=False):
+        left_x  = int(1e-6 * area[0][0] * self.data.shape[0] / self.size[0])
+        right_x = int(1e-6 * area[1][0] * self.data.shape[0] / self.size[0])
+        # A small poll in the office puts (0,0) in lower left corner
+        # even though Gwiddion actually defaults to upper left corner
+        low_y   = int(
+            self.data.shape[1] -
+            (1e-6 * area[1][1] * self.data.shape[1]  / self.size[1])
+        )
+        top_y   = int(
+            self.data.shape[1] -
+            (1e-6 * area[0][1] * self.data.shape[1] / self.size[1])
+        )
+        sub_area = self.data[low_y:top_y,left_x:right_x]
+        if debug:
+            print('Lx: ', left_x, '  Rx: ', right_x, '  Ly: ', low_y, ' Ty: ', top_y)
+            fig, ax = plt.subplots()
+            ax.imshow(
+                sub_area,
+                interpolation='none',
+                origin='upper',
+            )
+            plt.show()
+        return sub_area
+
     def calculate_roughness(self, area=None):
         # todo: RMS is just one way of calculating surface roughness
         # consider to implement other techniques
-
-        # If not none, data is the relevant subset rather than all data
         if area is None:
             data = self.data
+        else:
+            data = self._find_sub_area(area)
 
-        square_sum = np.square(data).sum()
+        mean = data.sum() / data.size
+        square_sum = np.square(data - mean).sum()
         square_mean = square_sum / data.size
         rms = np.sqrt(square_mean)
         return rms
