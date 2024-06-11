@@ -14,6 +14,13 @@ class SPMPlotter:
         self.rectangles = {}
 
         self.fig, self.axes['main'] = plt.subplots()
+
+        self.fig.subplots_adjust(left=0.02)
+        self.fig.subplots_adjust(bottom=0.05)
+        self.fig.subplots_adjust(top=0.98)
+        self.fig.subplots_adjust(right=0.68)
+        # self.fig.subplots_adjust(wspace=0.25)
+        # self.fig.subplots_adjust(hspace=0.25)
         # self._init_plot_areas()
 
     def _init_plot_areas(self):
