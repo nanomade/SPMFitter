@@ -52,8 +52,8 @@ class SPMPlotter:
         x1, y1 = eclick.xdata, eclick.ydata
         x2, y2 = erelease.xdata, erelease.ydata
         area = (x2 - x1) * (y2 - y1)
-        print(area)
-        if area < 1:
+        if area < 0.1:
+            print('Area too small - not selected')
             self.latest_select = None
         else:
             self.latest_select = ((x1, y1), (x2, y2))
@@ -79,16 +79,26 @@ class SPMPlotter:
             rect.set_visible(not rect.get_visible())
         self.fig.canvas.draw()
 
+    def _calculate_roughness(self, event):
+        area = self.latest_select
+        print('Calculate roughness, area is: ', area)
+        print(self.fitter.calculate_roughness(area))
+
     def plot_data(self):
         ax_extent = (0, self.fitter.size[0] * 1e6, 0, self.fitter.size[1] * 1e6)
-        self.axes['main'].imshow(
+        main_plot = self.axes['main'].imshow(
             self.fitter.data, interpolation='none', origin='upper', extent=ax_extent,
         )
+        self.fig.colorbar(main_plot)
         self._init_plot_areas()
 
         self.axes['show_boxes'] = self.fig.add_axes([0.82, 0.7, 0.1, 0.025])
         b_show_boxes = Button(self.axes['show_boxes'], 'Show marked')
         b_show_boxes.on_clicked(self._show_boxes)
+
+        self.axes['calc_roughtness'] = self.fig.add_axes([0.82, 0.65, 0.1, 0.025])
+        b_calc_rough = Button(self.axes['calc_roughtness'], 'Calculate roughness')
+        b_calc_rough.on_clicked(self._calculate_roughness)
 
         plt.show()
 
