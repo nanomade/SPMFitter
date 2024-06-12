@@ -90,10 +90,20 @@ class SPMFitter:
         rms = np.sqrt(square_mean)
         return rms
 
-    def _plane_fit(self, plot=False):
-        data = self.data
+    def _plane_fit(self, area=None, plot=False):
+        if area is None:
+            data = self.data
+            global_data = self.data
+        else:
+            data = self._find_sub_area(area)
+            global_data = self.data
+
         # https://gist.github.com/RustingSword/e22a11e1d391f2ab1f2c
-        X, Y = np.meshgrid(np.arange(data.shape[0]), np.arange(data.shape[1]))
+        X, Y = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
+        X_global, Y_global = np.meshgrid(
+            np.arange(global_data.shape[1]), np.arange(global_data.shape[0])
+        )
+
         G = np.ones((data.shape[0] * data.shape[1], 3))
         G[:, 0] = X.flatten()
         G[:, 1] = Y.flatten()
@@ -106,20 +116,20 @@ class SPMFitter:
         normal = normal / nn
         point = np.array([0.0, 0.0, c])
         d = -point.dot(normal)
-        z = (-normal[0] * X - normal[1] * Y - d) * 1.0 / normal[2]
+        z = (-normal[0] * X_global - normal[1] * Y_global - d) * 1.0 / normal[2]
         # End of magic
 
         if plot:
             fig = plt.figure()
             ax = fig.add_subplot(projection='3d')
             ax.plot_surface(X, Y, data, rstride=10, cstride=10)
-            ax.plot_surface(X, Y, z, rstride=10, cstride=10, alpha=0.2)
-            ax.plot_surface(X, Y, data - z, rstride=10, cstride=10, alpha=0.2)
+            ax.plot_surface(X_global, Y_global, z, rstride=10, cstride=10, alpha=0.2)
+            ax.plot_surface(X_global, Y_global, global_data - z, rstride=10, cstride=10, alpha=0.2)
             plt.show()
         return z
 
-    def apply_plane_fit(self):
-        fitted_plane = self._plane_fit()
+    def apply_plane_fit(self, area=None):
+        fitted_plane = self._plane_fit(area, plot=True)
         self.treatments.append('Subtract global plane fit')
         self.data = self.data - fitted_plane
         return True
