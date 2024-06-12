@@ -1,3 +1,4 @@
+import numpy as np
 import matplotlib.pyplot as plt
 
 from matplotlib.widgets import Button, RectangleSelector
@@ -91,14 +92,27 @@ class SPMPlotter:
         print('Calculate roughness, area is: ', area)
         print(self.fitter.calculate_roughness(area))
 
+    def _plane_fit(self, event):
+        area = self.latest_select
+        self.fitter.apply_plane_fit(area)
+        self.main_plot.set_data(self.fitter.data)
+        min_val, max_val = self.fitter.data.min(), self.fitter.data.max()
+        self.main_plot.set_clim(min_val, max_val)
+        self.color_bar.mappable.set_clim(min_val, max_val)
+
+        # ticks = np.linspace(min_val, max_val, num=6, endpoint=True)
+        # self.color_bar.set_ticks(ticks)
+        self.fig.canvas.draw()
+
     def plot_data(self):
         ax_extent = (0, self.fitter.size[0] * 1e6, 0, self.fitter.size[1] * 1e6)
-        main_plot = self.axes['main'].imshow(
+        self.main_plot = self.axes['main'].imshow(
             self.fitter.data, interpolation='none', origin='upper', extent=ax_extent,
         )
-        self.fig.colorbar(main_plot)
+        self.color_bar = self.fig.colorbar(self.main_plot)
         self._init_plot_areas()
 
+        # Action buttons:
         self.axes['show_boxes'] = self.fig.add_axes([0.82, 0.7, 0.1, 0.025])
         b_show_boxes = Button(self.axes['show_boxes'], 'Show marked')
         b_show_boxes.on_clicked(self._show_boxes)
@@ -106,6 +120,10 @@ class SPMPlotter:
         self.axes['calc_roughtness'] = self.fig.add_axes([0.82, 0.65, 0.1, 0.025])
         b_calc_rough = Button(self.axes['calc_roughtness'], 'Calculate roughness')
         b_calc_rough.on_clicked(self._calculate_roughness)
+
+        self.axes['plane_fit'] = self.fig.add_axes([0.82, 0.60, 0.1, 0.025])
+        b_plane_fit = Button(self.axes['plane_fit'], 'Plane fit')
+        b_plane_fit.on_clicked(self._plane_fit)
 
         plt.show()
 
