@@ -1,5 +1,6 @@
 import gwyfile
 import numpy as np
+import numpy.ma as ma
 import scipy as sp
 import matplotlib.pyplot as plt
 
@@ -34,24 +35,14 @@ class SPMFitter:
         ax.plot(row_sum)
         plt.show()
 
-    # def mask_patterned_area(self, tl, br):
-    #     x1 = tl[0]
-    #     y1 = tl[1]
-    #     x2 = br[0]
-    #     y2 = br[1]
-    #     masked = self.data
-    #     print(y1, y2, x1, x2)
-    #     masked[y1:y2, x1:x2] = 0
-    #     fig, ax = plt.subplots()
-    #     ax.imshow(
-    #         masked,
-    #         interpolation='none',
-    #         origin='upper',
-    #         extent=(0, self.size[0], 0, self.size[1]),
-    #     )
-    #     plt.show()
-
-    def _find_sub_area(self, area, debug=False):
+    def _find_sub_area(self, area, mask=False):
+        """
+        Find a sub-area of self.data.
+        :param tuple area: The area of relevance
+        :param bool mask: If False, the result will be the sub-area indicated above
+        If True, the result will be the full area with the area masked by nan
+        :return: The sub-area or masked full area as
+        """
         left_x  = int(1e-6 * area[0][0] * self.data.shape[0] / self.size[0])
         right_x = int(1e-6 * area[1][0] * self.data.shape[0] / self.size[0])
         # A small poll in the office puts (0,0) in lower left corner
@@ -64,17 +55,14 @@ class SPMFitter:
             self.data.shape[1] -
             (1e-6 * area[0][1] * self.data.shape[1] / self.size[1])
         )
-        sub_area = self.data[low_y:top_y,left_x:right_x]
-        if debug:
-            print('Lx: ', left_x, '  Rx: ', right_x, '  Ly: ', low_y, ' Ty: ', top_y)
-            fig, ax = plt.subplots()
-            ax.imshow(
-                sub_area,
-                interpolation='none',
-                origin='upper',
-            )
-            plt.show()
-        return sub_area
+        # print('Lx: ', left_x, '  Rx: ', right_x, '  Ly: ', low_y, ' Ty: ', top_y)
+
+        if mask:
+            data = np.copy(self.data)
+            data[low_y:top_y,left_x:right_x] = np.nan
+        else:
+            data = self.data[low_y:top_y,left_x:right_x]
+        return data
 
     def calculate_roughness(self, area=None):
         # todo: RMS is just one way of calculating surface roughness
@@ -90,13 +78,12 @@ class SPMFitter:
         rms = np.sqrt(square_mean)
         return rms
 
-    def _plane_fit(self, area=None, plot=False):
+    def _plane_fit(self, area=None, mask=False, plot=False):
+        global_data = self.data
         if area is None:
-            data = self.data
-            global_data = self.data
+            data = global_data
         else:
-            data = self._find_sub_area(area)
-            global_data = self.data
+            data = self._find_sub_area(area, mask=mask)
 
         # https://gist.github.com/RustingSword/e22a11e1d391f2ab1f2c
         X, Y = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
@@ -108,6 +95,14 @@ class SPMFitter:
         G[:, 0] = X.flatten()
         G[:, 1] = Y.flatten()
         Z = data.flatten()
+
+        # Corresponds to:
+        # for i in range(0, len(Z)):
+        #     if np.isnan(Z[i]):
+        #         delete_list.append(i)
+        delete_list = np.argwhere(np.isnan(Z)).flatten()
+        G = np.delete(G, delete_list, 0)
+        Z = np.delete(Z, delete_list, 0)
 
         (a, b, c), resid, rank, s = np.linalg.lstsq(G, Z, rcond=None)
         # Begin magic, too long since I went to school....
@@ -128,8 +123,8 @@ class SPMFitter:
             plt.show()
         return z
 
-    def apply_plane_fit(self, area=None):
-        fitted_plane = self._plane_fit(area, plot=True)
+    def apply_plane_fit(self, area=None, mask=False):
+        fitted_plane = self._plane_fit(area, mask=mask, plot=True)
         self.treatments.append('Subtract global plane fit')
         self.data = self.data - fitted_plane
         return True
