@@ -67,7 +67,6 @@ class SPMPlotter:
             self.latest_select = ((x1, y1), (x2, y2))
 
     def _mark_area(self, event):
-        print('klaf')
         if event.inaxes == self.axes['set_patterned']:
             rect = self.rectangles['patterned']
             self.fitter.patterend_region = self.latest_select
@@ -93,8 +92,11 @@ class SPMPlotter:
         print(self.fitter.calculate_roughness(area))
 
     def _plane_fit(self, event):
+        # Left button: Fit selected area, right button: fit ouside selected area
+        mask = (event.button > 1)
+
         area = self.latest_select
-        self.fitter.apply_plane_fit(area)
+        self.fitter.apply_plane_fit(area, mask=mask)
         self.main_plot.set_data(self.fitter.data)
         min_val, max_val = self.fitter.data.min(), self.fitter.data.max()
         self.main_plot.set_clim(min_val, max_val)
