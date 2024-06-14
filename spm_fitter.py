@@ -1,8 +1,21 @@
+import multiprocessing  # To be used for faster fitting
+
 import gwyfile
 import numpy as np
-import numpy.ma as ma
 import scipy as sp
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+
+
+TICK_PARMAMS = {  # This should go to a file with defaults
+    'direction': 'in',
+    'length': 3,
+    'width': 1,
+    'colors': 'k',
+    'labelsize': 5,
+    'axis': 'both',
+    'pad': 2
+}
 
 
 class SPMFitter:
@@ -43,15 +56,15 @@ class SPMFitter:
         If True, the result will be the full area with the area masked by nan
         :return: The sub-area or masked full area as
         """
-        left_x  = int(1e-6 * area[0][0] * self.data.shape[0] / self.size[0])
+        left_x = int(1e-6 * area[0][0] * self.data.shape[0] / self.size[0])
         right_x = int(1e-6 * area[1][0] * self.data.shape[0] / self.size[0])
         # A small poll in the office puts (0,0) in lower left corner
         # even though Gwiddion actually defaults to upper left corner
-        low_y   = int(
+        low_y = int(
             self.data.shape[1] -
-            (1e-6 * area[1][1] * self.data.shape[1]  / self.size[1])
+            (1e-6 * area[1][1] * self.data.shape[1] / self.size[1])
         )
-        top_y   = int(
+        top_y = int(
             self.data.shape[1] -
             (1e-6 * area[0][1] * self.data.shape[1] / self.size[1])
         )
@@ -59,9 +72,9 @@ class SPMFitter:
 
         if mask:
             data = np.copy(self.data)
-            data[low_y:top_y,left_x:right_x] = np.nan
+            data[low_y:top_y, left_x:right_x] = np.nan
         else:
-            data = self.data[low_y:top_y,left_x:right_x]
+            data = self.data[low_y:top_y, left_x:right_x]
         return data
 
     def calculate_roughness(self, area=None):
@@ -119,7 +132,8 @@ class SPMFitter:
             ax = fig.add_subplot(projection='3d')
             ax.plot_surface(X, Y, data, rstride=10, cstride=10)
             ax.plot_surface(X_global, Y_global, z, rstride=10, cstride=10, alpha=0.2)
-            ax.plot_surface(X_global, Y_global, global_data - z, rstride=10, cstride=10, alpha=0.2)
+            ax.plot_surface(X_global, Y_global, global_data - z,
+                            rstride=10, cstride=10, alpha=0.2)
             plt.show()
         return z
 
@@ -129,27 +143,22 @@ class SPMFitter:
         self.data = self.data - fitted_plane
         return True
 
-    def fit_line(self, line_number: int, plot=False):
-        # TODO: THIS SHOULD BE DERIVED FROM DATA - NOT HARD CODED!!
-        line = self.data[line_number][:][50:450]
-        # line = self.data[line_number][:][:]
+    def fit_line(self, line, p0=None, pdfpage=None):
+        dt = self.size[0] / len(self.original_data[0][:])
         X = np.arange(0, len(line))
 
-        peaks, _ = sp.signal.find_peaks(line, distance=20)
-
-        # A decent guess for frequency is to distribute all peaks acress the line
-        freq_guess = len(peaks) * 2 * np.pi / len(line)
-        # We fit a sine, zero should be a quater period offset
-        phase_guess = peaks[0] - (peaks[1] - peaks[0]) / 4
-
-        # Amplitude guess is simply max minus min
-        z_mean = sum(line) / len(line)
-        ampl_guess = max(line) - z_mean
-        p0 = [ampl_guess, freq_guess, phase_guess, z_mean, 0]
-
+        if p0 is None:
+            peaks, _ = sp.signal.find_peaks(line, distance=20)
+            # A decent guess for frequency is to distribute all peaks acress the line
+            freq_guess = len(peaks) * 2 * np.pi / len(line)
+            # We fit a sine, zero should be a quater period offset
+            phase_guess = peaks[0] - (peaks[1] - peaks[0]) / 4
+            # Amplitude guess is simply max minus min
+            z_mean = sum(line) / len(line)
+            ampl_guess = max(line) - z_mean
+            p0 = [ampl_guess, freq_guess, phase_guess, z_mean, 0]
         fitfunc = lambda p, x: p[0] * np.sin(p[1] * x + p[2]) + p[3] + p[4] * x
         errfunc = lambda p, x, y: fitfunc(p, x) - y
-
         params = {
             'method': 'lm',
             'jac': '2-point',
@@ -159,37 +168,103 @@ class SPMFitter:
         }
         fit = sp.optimize.least_squares(errfunc, p0[:], args=(X, line), **params)
 
-        if plot:
-            print(fit)
-            fig, ax = plt.subplots()
-            # for peak in peaks:
-            #    ax.plot(peak, line[peak], 'bo')
-            ax.plot(X, line, 'r+', label='Data')
-            # ax.plot(X, fitfunc(p0, X), label='Initial function')
-            ax.plot(X, fitfunc(fit.x, X), label='Fitted function')
-            plt.legend()
-            plt.show()
-
-        fit_params = None
+        fit_params = {}
         if fit.status > 0:
             fit_params = {
-                'amplitude': fit.x[0],
-                'frequency': fit.x[1],
-                'phase': fit.x[2],
-                'offset': fit.x[3],
-                'slope': fit.x[4],
-                'iterations': fit.nfev,
+                'amplitude': fit.x[0] * 1e9,  # nm
+                'frequency': 1e-6 * fit.x[1] / dt,  # rad / μm
+                'phase': fit.x[2] * dt * 1e9,  # nm
+                'offset': fit.x[3] * 1e9,  # nm
+                'slope': fit.x[4] * 1e3 / dt,  # nm/μm
             }
-        return fit_params
 
-    def fit_to_all_lines(self, parameter, plot=False):
+        if pdfpage:
+            print(fit)
+            fig = plt.figure()
+            fig.subplots_adjust(right=0.75)
+            ax = fig.add_subplot(2, 1, 1)
+            ax.set_xlabel('Distance / μm', fontsize=6)
+            ax.set_ylabel('Height / nm', fontsize=6)
+            # for peak in peaks:
+            #    ax.plot(peak, line[peak], 'bo')
+            ax.plot(1e6 * dt * X, 1e9 * line, 'r+', label='Data')
+            ax.plot(1e6 * dt * X, 1e9 * fitfunc(p0, X), linewidth=0.2,
+                    label='Initial function')
+            ax.plot(1e6 * dt * X, 1e9 * fitfunc(fit.x, X),
+                    label='Fitted function')
+            ax.tick_params(**TICK_PARMAMS)
+            ax.yaxis.get_offset_text().set_size(6)
+            ax.xaxis.get_offset_text().set_size(6)
+            # plt.legend()
+
+            texts = [
+                ('Amplitude (A): {:.2f}nm', 'amplitude'),
+                ('Frequency (F): {:.2f}rad/μm', 'frequency'),
+                ('Phase (P): {:.1f}nm', 'phase'),
+                ('Offset (O): {:.1f}nm', 'offset'),
+                ('Slope (S): {:.1f} nm/μm', 'slope'),
+            ]
+            for i in range(0, len(texts)):
+                key = texts[i][1]
+                msg = texts[i][0].format(fit_params.get(key, -1))
+                ax.text(1.01, 1.0 - i * 0.07, msg, fontsize=6,
+                        transform=ax.transAxes)
+
+            msg = 'Fit function:'
+            ax.text(1.01, 0.6, msg, fontsize=6, transform=ax.transAxes)
+            func = 'Asin(Fx + P) + O + Sx'
+            ax.text(1.01, 0.54, func, fontsize=6, transform=ax.transAxes)
+
+            msg = 'Optimality: {:.2e}'.format(fit.optimality)
+            ax.text(1.01, 0.3, msg, fontsize=6, transform=ax.transAxes)
+            msg = 'Iterations: {}'.format(fit.nfev)
+            ax.text(1.01, 0.23, msg, fontsize=6, transform=ax.transAxes)
+            msg = 'Success: {}.'.format(fit.success)
+            ax.text(1.01, 0.16, msg, fontsize=6, transform=ax.transAxes)
+            msg = 'Message:'
+            ax.text(1.01, 0.09, msg, fontsize=6, transform=ax.transAxes)
+            msg = '{}'.format(fit.message)
+            ax.text(1.01, 0.02, msg, fontsize=6, transform=ax.transAxes)
+
+            ax = fig.add_subplot(2, 1, 2)
+            ax.set_xlabel('Distance / μm', fontsize=6)
+            ax.set_ylabel('Residual / nm', fontsize=6)
+            ax.plot(1e6 * dt * X, 1e9 * (fitfunc(fit.x, X) - line), label='Residual')
+            ax.tick_params(**TICK_PARMAMS)
+            ax.xaxis.get_offset_text().set_size(6)
+            ax.yaxis.get_offset_text().set_size(6)
+
+            plt.savefig(pdfpage, format='pdf')
+            plt.close()
+        return fit_params, fit
+
+    def fit_to_all_lines(self, parameter, area=None, plot=False):
+        # Set pp to None to skip exporting pdf
+        pp = PdfPages('multipage.pdf')
+
+        if area is None:
+            data = self.data
+        else:
+            data = self._find_sub_area(area)
+
+        fit = None
         values = []
-        for line in range(0, self.data.shape[0]):
-            fit = self.fit_line(line)
+        for line_nr in range(0, data.shape[0]):
+            line = data[line_nr][:][:]
+
+            # TODO: After gettings fit parameters from the first few fits, we could
+            # gain a significant performance boost by funneling the rest of the
+            # fits into a multi-process queue
+            if fit:
+                fit_params, fit = self.fit_line(line, p0=fit.x, pdfpage=pp)
+            else:
+                fit_params, fit = self.fit_line(line, pdfpage=pp)
             if fit is None:
                 values.append(None)
             else:
-                values.append(fit[parameter])
+                values.append(fit_params[parameter])
+        if pp:
+            pp.close()
 
         if plot:
             fig, ax = plt.subplots()
