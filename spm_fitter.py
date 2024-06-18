@@ -143,6 +143,25 @@ class SPMFitter:
         self.data = self.data - fitted_plane
         return True
 
+    def find_modulated_area(self):
+        #for line_nr in range(0, self.data.shape[0]):
+        for line_nr in [10, 20, 40, 100, 200, 511]:
+            line = self.data[line_nr][:][:]
+            X = np.arange(0, len(line))
+
+            peaks, properties = sp.signal.find_peaks(line, distance=20, width=10)
+            print()
+            print(line_nr, peaks, properties)
+            print(properties["prominences"].max())
+            # Todo: Identify real peaks, possibly most easily by comparing their height to the baseline of the 10% lowest values
+    
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 1, 1)
+            ax.plot(X,line, 'r+', label='Data')
+            for peak in peaks:
+                ax.plot(peak, line[peak], 'bo')
+            plt.show()
+
     def fit_line(self, line, p0=None, pdfpage=None):
         dt = self.size[0] / len(self.original_data[0][:])
         X = np.arange(0, len(line))
@@ -278,6 +297,8 @@ if __name__ == "__main__":
     # - Plot residuals of fits
 
     FITTER = SPMFitter("F1.002.gwy")
+    FITTER.find_modulated_area()
+    exit()
 
     # FITTER.fit_to_all_lines('frequency', plot=True)
 
