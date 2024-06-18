@@ -1,4 +1,3 @@
-import numpy as np
 import matplotlib.pyplot as plt
 
 from matplotlib.widgets import Button, RectangleSelector
@@ -91,6 +90,11 @@ class SPMPlotter:
         print('Calculate roughness, area is: ', area)
         print(self.fitter.calculate_roughness(area))
 
+    def _fit_lines(self, event):
+        area = self.latest_select
+        print('Fit lines, area is: ', area)
+        self.fitter.fit_to_all_lines(parameter='frequency', area=area, plot=True)
+
     def _plane_fit(self, event):
         # Left button: Fit selected area, right button: fit ouside selected area
         mask = (event.button > 1)
@@ -126,6 +130,10 @@ class SPMPlotter:
         self.axes['plane_fit'] = self.fig.add_axes([0.82, 0.60, 0.1, 0.025])
         b_plane_fit = Button(self.axes['plane_fit'], 'Plane fit')
         b_plane_fit.on_clicked(self._plane_fit)
+
+        self.axes['fit_lines'] = self.fig.add_axes([0.82, 0.55, 0.1, 0.025])
+        b_fit_lines = Button(self.axes['fit_lines'], 'Fit lines')
+        b_fit_lines.on_clicked(self._fit_lines)
 
         plt.show()
 
