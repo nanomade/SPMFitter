@@ -17,6 +17,14 @@ TICK_PARMAMS = {  # This should go to a file with defaults
     'pad': 2,
 }
 
+FIT_PARAMS = {
+    'method': 'lm',
+    'jac': '2-point',
+    'ftol': 1e-14,
+    'xtol': 1e-14,
+    'max_nfev': 20000,
+}
+
 
 class SPMFitter:
     def __init__(self, filename):
@@ -40,13 +48,22 @@ class SPMFitter:
         y_size = channels["ZSensor"].yreal
         return file_data, (x_size, y_size)
 
-    def find_all_medians(self):
-        row_sum = np.zeros(len(self.data[1]))
-        for i in range(0, len(self.data[1])):
-            row_sum[i] = sum(self.data[:][i])
-        fig, ax = plt.subplots()
-        ax.plot(row_sum)
-        plt.show()
+    @staticmethod
+    def _sine_fit_func(p, x):
+        value = p[0] * np.sin(p[1] * x + p[2]) + p[3] + p[4] * x
+        return value
+
+    def _sine_error_func(self, p, x, y):
+        error = self._sine_fit_func(p, x) - y
+        return error
+
+    # def find_all_medians(self):
+    #     row_sum = np.zeros(len(self.data[1]))
+    #     for i in range(0, len(self.data[1])):
+    #         row_sum[i] = sum(self.data[:][i])
+    #     fig, ax = plt.subplots()
+    #     ax.plot(row_sum)
+    #     plt.show()
 
     def _find_sub_area(self, area, mask=False):
         """
@@ -175,16 +192,10 @@ class SPMFitter:
             z_mean = sum(line) / len(line)
             ampl_guess = max(line) - z_mean
             p0 = [ampl_guess, freq_guess, phase_guess, z_mean, 0]
-        fitfunc = lambda p, x: p[0] * np.sin(p[1] * x + p[2]) + p[3] + p[4] * x
-        errfunc = lambda p, x, y: fitfunc(p, x) - y
-        params = {
-            'method': 'lm',
-            'jac': '2-point',
-            'ftol': 1e-13,
-            'xtol': 1e-13,
-            'max_nfev': 20000,
-        }
-        fit = sp.optimize.least_squares(errfunc, p0[:], args=(X, line), **params)
+
+        fit = sp.optimize.least_squares(
+            self._sine_error_func, p0[:], args=(X, line), **FIT_PARAMS
+        )
 
         fit_params = {}
         if fit.status > 0:
@@ -208,11 +219,15 @@ class SPMFitter:
             ax.plot(1e6 * dt * X, 1e9 * line, 'r+', label='Data')
             ax.plot(
                 1e6 * dt * X,
-                1e9 * fitfunc(p0, X),
+                1e9 * self._sine_fit_func(p0, X),
                 linewidth=0.2,
                 label='Initial function',
             )
-            ax.plot(1e6 * dt * X, 1e9 * fitfunc(fit.x, X), label='Fitted function')
+            ax.plot(
+                1e6 * dt * X,
+                1e9 * self._sine_fit_func(fit.x, X),
+                label='Fitted function',
+            )
             ax.tick_params(**TICK_PARMAMS)
             ax.yaxis.get_offset_text().set_size(6)
             ax.xaxis.get_offset_text().set_size(6)
@@ -249,7 +264,11 @@ class SPMFitter:
             ax = fig.add_subplot(2, 1, 2)
             ax.set_xlabel('Distance / μm', fontsize=6)
             ax.set_ylabel('Residual / nm', fontsize=6)
-            ax.plot(1e6 * dt * X, 1e9 * (fitfunc(fit.x, X) - line), label='Residual')
+            ax.plot(
+                1e6 * dt * X,
+                1e9 * (self._sine_fit_func(fit.x, X) - line),
+                label='Residual',
+            )
             ax.tick_params(**TICK_PARMAMS)
             ax.xaxis.get_offset_text().set_size(6)
             ax.yaxis.get_offset_text().set_size(6)
@@ -292,51 +311,33 @@ class SPMFitter:
             plt.show()
         return values
 
-    def sinosodial_fit_area(self, area=None, plot=False):
-        global_data = self.data
+    def sinosodial_fit_area(self, area, plot=False):
         if area is None:
-            data = global_data
-        else:
-            data = self._find_sub_area(area)
+            print('You need to select an area')
+            return
+        data = self._find_sub_area(area)
 
         # https://gist.github.com/RustingSword/e22a11e1d391f2ab1f2c
         X, Y = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
-        X_global, Y_global = np.meshgrid(
-            np.arange(global_data.shape[1]), np.arange(global_data.shape[0])
+        # We need a good guess for p0; fit_line actually is quite decent at guessing
+        # ab-initio, so we simply pick a random line as starting guess for the 2d-fit
+        _, line_fit = self.fit_line(data[2][:][:])
+        p0 = line_fit.x
+        fit = sp.optimize.least_squares(
+            self._sine_error_func,
+            p0[:],
+            args=(X.flatten(), data.flatten()),
+            **FIT_PARAMS
         )
-
-        G = np.ones((data.shape[0] * data.shape[1], 3))
-        G[:, 0] = X.flatten()
-        G[:, 1] = Y.flatten()
-        Z = data.flatten()
-
-        # !!!!!!!
-        p0 = [-2.587e-08, 2.424e-01, 3.251, 1.006e-08]
-        fitfunc = lambda p, x: p[0] * np.sin(p[1] * x + p[2]) + p[3]
-        errfunc = lambda p, x, y: fitfunc(p, x) - y
-        params = {
-            'method': 'lm',
-            'jac': '2-point',
-            'ftol': 1e-14,
-            'xtol': 1e-14,
-            'max_nfev': 20000,
-        }
-
-        fit = sp.optimize.least_squares(errfunc, p0[:], args=(X.flatten(), Z), **params)
         print(fit)
 
-        plot = True
-
-        # data = np.array([fitfunc(p0, X.flatten()), fitfunc(p0, X.flatten())])
         init_data = np.ones((data.shape[0], data.shape[1]))
-        for i in range(0, data.shape[0]):
-            for j in range(0, data.shape[1]):
-                init_data[i][j] = fitfunc(p0, j)
+        for j in np.arange(0, data.shape[1]):
+            init_data[:, j] = self._sine_fit_func(p0, j)
 
         fit_data = np.ones((data.shape[0], data.shape[1]))
-        for i in range(0, data.shape[0]):
-            for j in range(0, data.shape[1]):
-                fit_data[i][j] = fitfunc(fit.x, j)
+        for j in range(0, data.shape[1]):
+            fit_data[:, j] = self._sine_fit_func(fit.x, j)
 
         if plot:
             fig = plt.figure()
@@ -354,14 +355,6 @@ class SPMFitter:
             r = ax.imshow(data - fit_data, interpolation='none', origin='upper')
             r.set_clim(data.min(), data.max())
             fig.colorbar(r)
-
-            # ax = fig.add_subplot(projection='3d')
-            # ax.plot_surface(X, Y, data, rstride=10, cstride=10)
-            # ax.plot_surface(X, Y, init_data, rstride=10, cstride=10, alpha=0.2)
-            # ax.plot_surface(X, Y, fit_data, rstride=10, cstride=10, alpha=0.2)
-            # ax.plot_surface(X_global, Y_global, z, rstride=10, cstride=10, alpha=0.2)
-            # ax.plot_surface(X_global, Y_global, global_data - z,
-            #                rstride=10, cstride=10, alpha=0.2)
         plt.show()
 
 
@@ -376,7 +369,7 @@ if __name__ == "__main__":
         (1.5102501387263887, 0.6960142904897203),
         (10.333155927349708, 9.370975012535515),
     )
-    FITTER.sinosodial_fit_area(area=area)
+    FITTER.sinosodial_fit_area(area=area, plot=True)
 
     # todo:
     # FITTER.find_modulated_area()
