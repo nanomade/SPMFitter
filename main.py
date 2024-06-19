@@ -95,6 +95,11 @@ class SPMPlotter:
         print('Fit lines, area is: ', area)
         self.fitter.fit_to_all_lines(parameter='frequency', area=area, plot=True)
 
+    def _fit_area(self, event):
+        area = self.latest_select
+        print('Fit area, area is: ', area)
+        self.fitter.sinosodial_fit_area(area=area, plot=True)
+
     def _plane_fit(self, event):
         # Left button: Fit selected area, right button: fit ouside selected area
         mask = (event.button > 1)
@@ -134,6 +139,10 @@ class SPMPlotter:
         self.axes['fit_lines'] = self.fig.add_axes([0.82, 0.55, 0.1, 0.025])
         b_fit_lines = Button(self.axes['fit_lines'], 'Fit lines')
         b_fit_lines.on_clicked(self._fit_lines)
+
+        self.axes['area_fit'] = self.fig.add_axes([0.82, 0.50, 0.1, 0.025])
+        b_fit_area = Button(self.axes['area_fit'], 'Fit area')
+        b_fit_area.on_clicked(self._fit_area)
 
         plt.show()
 
