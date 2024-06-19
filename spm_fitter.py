@@ -14,7 +14,7 @@ TICK_PARMAMS = {  # This should go to a file with defaults
     'colors': 'k',
     'labelsize': 5,
     'axis': 'both',
-    'pad': 2
+    'pad': 2,
 }
 
 
@@ -61,12 +61,10 @@ class SPMFitter:
         # A small poll in the office puts (0,0) in lower left corner
         # even though Gwiddion actually defaults to upper left corner
         low_y = int(
-            self.data.shape[1] -
-            (1e-6 * area[1][1] * self.data.shape[1] / self.size[1])
+            self.data.shape[1] - (1e-6 * area[1][1] * self.data.shape[1] / self.size[1])
         )
         top_y = int(
-            self.data.shape[1] -
-            (1e-6 * area[0][1] * self.data.shape[1] / self.size[1])
+            self.data.shape[1] - (1e-6 * area[0][1] * self.data.shape[1] / self.size[1])
         )
         # print('Lx: ', left_x, '  Rx: ', right_x, '  Ly: ', low_y, ' Ty: ', top_y)
 
@@ -132,19 +130,20 @@ class SPMFitter:
             ax = fig.add_subplot(projection='3d')
             ax.plot_surface(X, Y, data, rstride=10, cstride=10)
             ax.plot_surface(X_global, Y_global, z, rstride=10, cstride=10, alpha=0.2)
-            ax.plot_surface(X_global, Y_global, global_data - z,
-                            rstride=10, cstride=10, alpha=0.2)
+            ax.plot_surface(
+                X_global, Y_global, global_data - z, rstride=10, cstride=10, alpha=0.2
+            )
             plt.show()
         return z
 
-    def apply_plane_fit(self, area=None, mask=False):
-        fitted_plane = self._plane_fit(area, mask=mask, plot=True)
+    def apply_plane_fit(self, area=None, mask=False, plot=True):
+        fitted_plane = self._plane_fit(area, mask=mask, plot=plot)
         self.treatments.append('Subtract global plane fit')
         self.data = self.data - fitted_plane
         return True
 
     def find_modulated_area(self):
-        #for line_nr in range(0, self.data.shape[0]):
+        # for line_nr in range(0, self.data.shape[0]):
         for line_nr in [10, 20, 40, 100, 200, 511]:
             line = self.data[line_nr][:][:]
             X = np.arange(0, len(line))
@@ -154,10 +153,10 @@ class SPMFitter:
             print(line_nr, peaks, properties)
             print(properties["prominences"].max())
             # Todo: Identify real peaks, possibly most easily by comparing their height to the baseline of the 10% lowest values
-    
+
             fig = plt.figure()
             ax = fig.add_subplot(1, 1, 1)
-            ax.plot(X,line, 'r+', label='Data')
+            ax.plot(X, line, 'r+', label='Data')
             for peak in peaks:
                 ax.plot(peak, line[peak], 'bo')
             plt.show()
@@ -207,10 +206,13 @@ class SPMFitter:
             # for peak in peaks:
             #    ax.plot(peak, line[peak], 'bo')
             ax.plot(1e6 * dt * X, 1e9 * line, 'r+', label='Data')
-            ax.plot(1e6 * dt * X, 1e9 * fitfunc(p0, X), linewidth=0.2,
-                    label='Initial function')
-            ax.plot(1e6 * dt * X, 1e9 * fitfunc(fit.x, X),
-                    label='Fitted function')
+            ax.plot(
+                1e6 * dt * X,
+                1e9 * fitfunc(p0, X),
+                linewidth=0.2,
+                label='Initial function',
+            )
+            ax.plot(1e6 * dt * X, 1e9 * fitfunc(fit.x, X), label='Fitted function')
             ax.tick_params(**TICK_PARMAMS)
             ax.yaxis.get_offset_text().set_size(6)
             ax.xaxis.get_offset_text().set_size(6)
@@ -226,8 +228,7 @@ class SPMFitter:
             for i in range(0, len(texts)):
                 key = texts[i][1]
                 msg = texts[i][0].format(fit_params.get(key, -1))
-                ax.text(1.01, 1.0 - i * 0.07, msg, fontsize=6,
-                        transform=ax.transAxes)
+                ax.text(1.01, 1.0 - i * 0.07, msg, fontsize=6, transform=ax.transAxes)
 
             msg = 'Fit function:'
             ax.text(1.01, 0.6, msg, fontsize=6, transform=ax.transAxes)
@@ -291,13 +292,94 @@ class SPMFitter:
             plt.show()
         return values
 
+    def sinosodial_fit_area(self, area=None, plot=False):
+        global_data = self.data
+        if area is None:
+            data = global_data
+        else:
+            data = self._find_sub_area(area)
+
+        # https://gist.github.com/RustingSword/e22a11e1d391f2ab1f2c
+        X, Y = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
+        X_global, Y_global = np.meshgrid(
+            np.arange(global_data.shape[1]), np.arange(global_data.shape[0])
+        )
+
+        G = np.ones((data.shape[0] * data.shape[1], 3))
+        G[:, 0] = X.flatten()
+        G[:, 1] = Y.flatten()
+        Z = data.flatten()
+
+        # !!!!!!!
+        p0 = [-2.587e-08, 2.424e-01, 3.251, 1.006e-08]
+        fitfunc = lambda p, x: p[0] * np.sin(p[1] * x + p[2]) + p[3]
+        errfunc = lambda p, x, y: fitfunc(p, x) - y
+        params = {
+            'method': 'lm',
+            'jac': '2-point',
+            'ftol': 1e-14,
+            'xtol': 1e-14,
+            'max_nfev': 20000,
+        }
+
+        fit = sp.optimize.least_squares(errfunc, p0[:], args=(X.flatten(), Z), **params)
+        print(fit)
+
+        plot = True
+
+        # data = np.array([fitfunc(p0, X.flatten()), fitfunc(p0, X.flatten())])
+        init_data = np.ones((data.shape[0], data.shape[1]))
+        for i in range(0, data.shape[0]):
+            for j in range(0, data.shape[1]):
+                init_data[i][j] = fitfunc(p0, j)
+
+        fit_data = np.ones((data.shape[0], data.shape[1]))
+        for i in range(0, data.shape[0]):
+            for j in range(0, data.shape[1]):
+                fit_data[i][j] = fitfunc(fit.x, j)
+
+        if plot:
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 3, 1)
+            d = ax.imshow(data, interpolation='none', origin='upper')
+            d.set_clim(data.min(), data.max())
+            fig.colorbar(d)
+
+            ax = fig.add_subplot(1, 3, 2)
+            f = ax.imshow(fit_data, interpolation='none', origin='upper')
+            f.set_clim(data.min(), data.max())
+            fig.colorbar(f)
+
+            ax = fig.add_subplot(1, 3, 3)
+            r = ax.imshow(data - fit_data, interpolation='none', origin='upper')
+            r.set_clim(data.min(), data.max())
+            fig.colorbar(r)
+
+            # ax = fig.add_subplot(projection='3d')
+            # ax.plot_surface(X, Y, data, rstride=10, cstride=10)
+            # ax.plot_surface(X, Y, init_data, rstride=10, cstride=10, alpha=0.2)
+            # ax.plot_surface(X, Y, fit_data, rstride=10, cstride=10, alpha=0.2)
+            # ax.plot_surface(X_global, Y_global, z, rstride=10, cstride=10, alpha=0.2)
+            # ax.plot_surface(X_global, Y_global, global_data - z,
+            #                rstride=10, cstride=10, alpha=0.2)
+        plt.show()
+
 
 if __name__ == "__main__":
     # TODO:
     # - Plot residuals of fits
 
-    FITTER = SPMFitter("F1.002.gwy")
-    FITTER.find_modulated_area()
+    FITTER = SPMFitter('F1.002.gwy')
+
+    FITTER.apply_plane_fit(plot=False)
+    area = (
+        (1.5102501387263887, 0.6960142904897203),
+        (10.333155927349708, 9.370975012535515),
+    )
+    FITTER.sinosodial_fit_area(area=area)
+
+    # todo:
+    # FITTER.find_modulated_area()
     exit()
 
     # FITTER.fit_to_all_lines('frequency', plot=True)
