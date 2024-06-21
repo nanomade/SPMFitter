@@ -159,22 +159,43 @@ class SPMFitter:
         self.data = self.data - fitted_plane
         return True
 
+    def _find_modulated_lines(self):
+        """
+        Find the modulated lines by comparing standard deviation of all lines,
+        if it is higher than average, it is should be part of the modulation
+        """
+        stds = np.empty(len(self.data))
+        for line_nr in range(0, len(self.data)):
+            stds[line_nr] = self.data[line_nr][:][:].std()
+
+        mean_std = stds.mean()
+        modulated_lines = []
+        for line_nr in range(0, len(self.data)):
+            if stds[line_nr] > mean_std * 0.9:
+                modulated_lines.append(line_nr)
+        return modulated_lines
+
     def find_modulated_area(self):
-        # for line_nr in range(0, self.data.shape[0]):
-        for line_nr in [10, 20, 40, 100, 200, 511]:
+        modulated_lines = self._find_modulated_lines()
+        for line_nr in [111, 200, 482]:
+            # for line_nr in [10, 100, 200, 511]:
+            # for line_nr in modulated_lines:
             line = self.data[line_nr][:][:]
             X = np.arange(0, len(line))
 
-            peaks, properties = sp.signal.find_peaks(line, distance=20, width=10)
-            print()
-            print(line_nr, peaks, properties)
-            print(properties["prominences"].max())
-            # Todo: Identify real peaks, possibly most easily by comparing their height to the baseline of the 10% lowest values
+            peaks, properties = sp.signal.find_peaks(line, distance=5, width=5)
+            real_peaks = []
+            for peak in peaks:
+                if (line[peak] - line.mean()) > 0:
+                    real_peaks.append(peak)
+            first_peak = real_peaks[0]
+            last_peak = real_peaks[-1]
+            print('First peak: {}. Last peak: {}'.format(first_peak, last_peak))
 
             fig = plt.figure()
             ax = fig.add_subplot(1, 1, 1)
             ax.plot(X, line, 'r+', label='Data')
-            for peak in peaks:
+            for peak in real_peaks:
                 ax.plot(peak, line[peak], 'bo')
             plt.show()
 
@@ -360,11 +381,19 @@ class SPMFitter:
 
 if __name__ == "__main__":
     # TODO:
-    # - Plot residuals of fits
+    # - Fix y-axis on pdf export of fits to ensure shared y-axis
+    # - FFT of residuals on line fits
+    # - Estimate uncertainty on roughness
+    # - Auto-detection of patterned and modulated areas
 
     FITTER = SPMFitter('F1.002.gwy')
 
     FITTER.apply_plane_fit(plot=False)
+
+    # FITTER._find_modulated_lines()
+    FITTER.find_modulated_area()
+    exit()
+
     area = (
         (1.5102501387263887, 0.6960142904897203),
         (10.333155927349708, 9.370975012535515),
