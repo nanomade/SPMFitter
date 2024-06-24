@@ -14,7 +14,6 @@ class SPMPlotter:
         self.rectangles = {}
 
         self.fig, self.axes['main'] = plt.subplots()
-
         self.fig.subplots_adjust(left=0.02)
         self.fig.subplots_adjust(bottom=0.05)
         self.fig.subplots_adjust(top=0.98)
@@ -31,14 +30,16 @@ class SPMPlotter:
         kwargs = {'linewidth': 1, 'edgecolor': 'k', 'visible': False}
 
         self.rectangles['patterned'] = Rectangle(
-            (0, 0), 1, 1, alpha=0.5, facecolor='r', **kwargs)
+            (0, 0), 1, 1, alpha=0.5, facecolor='r', **kwargs
+        )
         self.axes['main'].add_patch(self.rectangles['patterned'])
         self.axes['set_patterned'] = self.fig.add_axes([0.82, 0.8, 0.1, 0.025])
         self.b_pattern = Button(self.axes['set_patterned'], 'Mark pattern')
         self.b_pattern.on_clicked(self._mark_area)
 
         self.rectangles['modulated'] = Rectangle(
-            (0, 0), 1, 1, alpha=0.7, facecolor='c', **kwargs)
+            (0, 0), 1, 1, alpha=0.7, facecolor='c', **kwargs
+        )
         self.axes['main'].add_patch(self.rectangles['modulated'])
         self.axes['set_modulated'] = self.fig.add_axes([0.82, 0.75, 0.1, 0.025])
         self.b_modulated = Button(self.axes['set_modulated'], 'Mark modulated')
@@ -64,14 +65,23 @@ class SPMPlotter:
             self.latest_select = None
         else:
             self.latest_select = ((x1, y1), (x2, y2))
+        print(self.latest_select)
 
-    def _mark_area(self, event):
-        if event.inaxes == self.axes['set_patterned']:
-            rect = self.rectangles['patterned']
-            self.fitter.patterend_region = self.latest_select
-        if event.inaxes == self.axes['set_modulated']:
-            rect = self.rectangles['modulated']
-            self.fitter.modulated_region = self.latest_select
+    def _mark_area(self, event, rect=None, area=None):
+        if event:
+            if event.inaxes == self.axes['set_patterned']:
+                rect = self.rectangles['patterned']
+                self.fitter.patterend_region = self.latest_select
+            if event.inaxes == self.axes['set_modulated']:
+                rect = self.rectangles['modulated']
+                self.fitter.modulated_region = self.latest_select
+        if area:
+            self.latest_select = area
+            if rect == 'modulated':
+                rect = self.rectangles[rect]
+                self.fitter.modulated_region = self.latest_select
+                print(self.latest_select)
+
         width = self.latest_select[1][0] - self.latest_select[0][0]
         height = self.latest_select[1][1] - self.latest_select[0][1]
         rect.set_visible(False)
@@ -96,14 +106,14 @@ class SPMPlotter:
         self.fitter.fit_to_all_lines(parameter='frequency', area=area, plot=True)
 
     def _fit_area(self, event):
-        plot = (event.button > 1)
+        plot = event.button > 1
         area = self.latest_select
         print('Fit area, area is: ', area)
         self.fitter.sinosodial_fit_area(area=area, plot=plot)
 
     def _plane_fit(self, event):
         # Left button: Fit selected area, right button: fit ouside selected area
-        mask = (event.button > 1)
+        mask = event.button > 1
 
         area = self.latest_select
         self.fitter.apply_plane_fit(area, mask=mask)
@@ -119,10 +129,17 @@ class SPMPlotter:
     def plot_data(self):
         ax_extent = (0, self.fitter.size[0] * 1e6, 0, self.fitter.size[1] * 1e6)
         self.main_plot = self.axes['main'].imshow(
-            self.fitter.data, interpolation='none', origin='upper', extent=ax_extent,
+            self.fitter.data,
+            interpolation='none',
+            origin='upper',
+            extent=ax_extent,
         )
         self.color_bar = self.fig.colorbar(self.main_plot)
         self._init_plot_areas()
+
+        self._mark_area(
+            event=None, rect='modulated', area=self.fitter.find_modulated_area()
+        )
 
         # Action buttons:
         self.axes['show_boxes'] = self.fig.add_axes([0.82, 0.7, 0.1, 0.025])
