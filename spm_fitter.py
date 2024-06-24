@@ -175,29 +175,49 @@ class SPMFitter:
                 modulated_lines.append(line_nr)
         return modulated_lines
 
-    def find_modulated_area(self):
+    def find_modulated_area(self, plot=False):
         modulated_lines = self._find_modulated_lines()
-        for line_nr in [111, 200, 482]:
-            # for line_nr in [10, 100, 200, 511]:
-            # for line_nr in modulated_lines:
-            line = self.data[line_nr][:][:]
-            X = np.arange(0, len(line))
+        center_line = int(len(modulated_lines) / 2)
+        line = self.data[center_line][:][:]
+        peaks, properties = sp.signal.find_peaks(line, distance=5, width=5)
+        real_peaks = []
+        for peak in peaks:
+            if (line[peak] - line.mean()) > 0:
+                real_peaks.append(peak)
+        first_peak = real_peaks[0]
+        last_peak = real_peaks[-1]
+        period = real_peaks[1] - real_peaks[0]
 
-            peaks, properties = sp.signal.find_peaks(line, distance=5, width=5)
-            real_peaks = []
-            for peak in peaks:
-                if (line[peak] - line.mean()) > 0:
-                    real_peaks.append(peak)
-            first_peak = real_peaks[0]
-            last_peak = real_peaks[-1]
+        start_fit = first_peak - period / 4
+        end_fit = last_peak + period / 4
+        if plot:
             print('First peak: {}. Last peak: {}'.format(first_peak, last_peak))
-
             fig = plt.figure()
             ax = fig.add_subplot(1, 1, 1)
+            X = np.arange(0, len(line))
             ax.plot(X, line, 'r+', label='Data')
             for peak in real_peaks:
                 ax.plot(peak, line[peak], 'bo')
+
+            ax.vlines(start_fit, line.min(), line.max())
+            ax.vlines(end_fit, line.min(), line.max())
             plt.show()
+
+        low_left = (
+            (1e6 * start_fit * self.size[0] / self.data.shape[0]),
+            (self.data.shape[1] - modulated_lines[-1])
+            * 1e6
+            * self.size[1]
+            / self.data.shape[1],
+        )
+        top_right = (
+            (1e6 * end_fit * self.size[0] / self.data.shape[0]),
+            (self.data.shape[1] - modulated_lines[0])
+            * 1e6
+            * self.size[1]
+            / self.data.shape[1],
+        )
+        return (low_left, top_right)
 
     def fit_line(self, line, p0=None, pdfpage=None):
         dt = self.size[0] / len(self.original_data[0][:])
