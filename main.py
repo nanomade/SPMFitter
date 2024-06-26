@@ -77,7 +77,7 @@ class SPMPlotter:
                 self.fitter.modulated_region = self.latest_select
         if area:
             self.latest_select = area
-            if rect == 'modulated':
+            if rect in ('patterned', 'modulated'):
                 rect = self.rectangles[rect]
                 self.fitter.modulated_region = self.latest_select
                 print(self.latest_select)
@@ -139,6 +139,9 @@ class SPMPlotter:
 
         self._mark_area(
             event=None, rect='modulated', area=self.fitter.find_modulated_area()
+        )
+        self._mark_area(
+            event=None, rect='patterned', area=self.fitter.find_patterned_area()
         )
 
         # Action buttons:
