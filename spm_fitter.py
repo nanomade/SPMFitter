@@ -474,36 +474,13 @@ if __name__ == "__main__":
     # - Fix y-axis on pdf export of fits to ensure shared y-axis
     # - FFT of residuals on line fits
     # - Estimate uncertainty on roughness
-    # - Auto-detection of patterned and modulated areas
+    # - Establish unit-tests to keep regressions in check
 
     FITTER = SPMFitter('F1.002.gwy')
 
     FITTER.apply_plane_fit(plot=False)
 
-    print('Modulated: ', FITTER.find_modulated_area())
-    print('Patterned: ', FITTER.find_patterned_area(plot=False))
-    exit()
-
-    area = (
-        (1.5102501387263887, 0.6960142904897203),
-        (10.333155927349708, 9.370975012535515),
-    )
-    FITTER.sinosodial_fit_area(area=area, plot=True)
-
-    # todo:
-    # FITTER.find_modulated_area()
-    exit()
-
-    # FITTER.fit_to_all_lines('frequency', plot=True)
-
-    FITTER.apply_plane_fit()
-    print(FITTER.calculate_roughness())
-
-    # fit = FITTER.fit_line(7, plot=True)
-    # fit = FITTER.fit_line(262, plot=True)
-
-    Z = FITTER._plane_fit()
-    FITTER.data = FITTER.data - Z
-    # FITTER.plot_data()
-    # FITTER.mask_patterned_area( (24, 120), (476, 476) )
-    FITTER.find_all_medians()
+    area = FITTER.find_modulated_area()
+    print('Modulated: ', area)
+    print('Patterned: ', FITTER.find_patterned_area(plot=False)))
+    # FITTER.sinosodial_fit_area(area=area, plot=True)
