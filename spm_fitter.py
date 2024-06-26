@@ -6,6 +6,7 @@ import scipy as sp
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
+import fit_functions
 
 TICK_PARMAMS = {  # This should go to a file with defaults
     'direction': 'in',
@@ -47,15 +48,6 @@ class SPMFitter:
         x_size = channels["ZSensor"].xreal
         y_size = channels["ZSensor"].yreal
         return file_data, (x_size, y_size)
-
-    @staticmethod
-    def _sine_fit_func(p, x):
-        value = p[0] * np.sin(p[1] * x + p[2]) + p[3] + p[4] * x
-        return value
-
-    def _sine_error_func(self, p, x, y):
-        error = self._sine_fit_func(p, x) - y
-        return error
 
     # def find_all_medians(self):
     #     row_sum = np.zeros(len(self.data[1]))
@@ -178,17 +170,11 @@ class SPMFitter:
     def _index_to_area(self, x_l, x_r, y_t, y_b):
         low_left = (
             (1e6 * x_l * self.size[0] / self.data.shape[0]),
-            (self.data.shape[1] - y_b)
-            * 1e6
-            * self.size[1]
-            / self.data.shape[1],
+            (self.data.shape[1] - y_b) * 1e6 * self.size[1] / self.data.shape[1],
         )
         top_right = (
             (1e6 * x_r * self.size[0] / self.data.shape[0]),
-            (self.data.shape[1] - y_t)
-            * 1e6
-            * self.size[1]
-            / self.data.shape[1],
+            (self.data.shape[1] - y_t) * 1e6 * self.size[1] / self.data.shape[1],
         )
         return (low_left, top_right)
 
@@ -202,7 +188,7 @@ class SPMFitter:
             line = self.data[line_nr][:][:]
             X = np.arange(0, len(line))
             z = np.polyfit(X, line, 1)
-            line = line - (X*z[0] + z[1])
+            line = line - (X * z[0] + z[1])
 
             start_steps = []
             delta_ys = []
@@ -219,21 +205,12 @@ class SPMFitter:
             high_part = line[hat_start:hat_stop]
             p0 = [hat_start, hat_stop, np.mean(low_part), np.mean(high_part)]
 
-            def _top_hat(p, x):
-                low = np.append(np.where(x < p[0])[0], np.where(x > p[1])[0])
-                value = np.zeros(len(line)) + p[3]
-                np.put(value, low, p[2])
-                return value
-
-            def _box_error_func(p, x, y):
-                error = _top_hat(p, x) - y
-                return error
-
             # Fit the hat as best as possible. Notice that the fit is unable to catch
             # the non-monotomic hat kink, this is hopefully correctly catched by
             # the initial guess if this is a patterned region
             fit = sp.optimize.least_squares(
-                _box_error_func, p0[:], args=(X, line), **FIT_PARAMS
+                fit_functions.top_hat_error_func, p0[:], args=(X, line), **FIT_PARAMS
+                #_top_hat_error_func, p0[:], args=(X, line), **FIT_PARAMS
             )
 
             # res = line - _top_hat(fit.x, X)
@@ -248,11 +225,11 @@ class SPMFitter:
             left_edges.append(hat_start)
             right_edges.append(hat_stop)
             patterned_lines.append(line_nr)
-            
-            #box_plot = []
-            #for x in X:
+
+            # box_plot = []
+            # for x in X:
             #    box_plot.append(_box(p0, x))
-            
+
             if plot:
                 fig = plt.figure()
                 ax = fig.add_subplot(1, 1, 1)
@@ -262,25 +239,26 @@ class SPMFitter:
                 # ax.plot(X, line, 'r+', label='Data')
                 # ax.plot(X, res, 'b-', label='Init')
                 ax.plot(X, _top_hat(p0, X), 'b-', label='Init')
-                #ax.plot(X, _box(fit.x, X), 'g-', label='Fit')
+                # ax.plot(X, _box(fit.x, X), 'g-', label='Fit')
                 # ax.plot(X, box_plot, 'b-', label='Fit')
-                #for peak in real_peaks:
+                # for peak in real_peaks:
                 #    ax.plot(peak, line[peak], 'bo')
                 # ax.hlines(1e-8, 0, 500)
                 # ax.vlines(end_fit, line.min(), line.max())
                 plt.show()
 
         print()
-        
+
         left_edge = sorted(left_edges)[int(len(left_edges) * 0.2)]
         right_edge = sorted(right_edges)[int(len(right_edges) * 0.8)]
         low_left = (left_edge, patterned_lines[-1])
         top_right = (right_edge, patterned_lines[0])
-        # return (low_left, top_right) 
+        # return (low_left, top_right)
         area = self._index_to_area(
-            left_edge, right_edge, patterned_lines[0], patterned_lines[-1])
+            left_edge, right_edge, patterned_lines[0], patterned_lines[-1]
+        )
         return area
-    
+
     def find_modulated_area(self, plot=False):
         modulated_lines = self._find_modulated_lines()
         center_line = int(len(modulated_lines) / 2)
@@ -323,10 +301,11 @@ class SPMFitter:
             * self.size[1]
             / self.data.shape[1],
         )
-        # 
-        #return (low_left, top_right)
+        #
+        # return (low_left, top_right)
         area = self._index_to_area(
-            start_fit, end_fit, modulated_lines[0], modulated_lines[-1])
+            start_fit, end_fit, modulated_lines[0], modulated_lines[-1]
+        )
         return area
 
     def fit_line(self, line, p0=None, pdfpage=None):
@@ -345,7 +324,8 @@ class SPMFitter:
             p0 = [ampl_guess, freq_guess, phase_guess, z_mean, 0]
 
         fit = sp.optimize.least_squares(
-            self._sine_error_func, p0[:], args=(X, line), **FIT_PARAMS
+            # self._sine_error_func, p0[:], args=(X, line), **FIT_PARAMS
+            fit_functions.sine_error_func, p0[:], args=(X, line), **FIT_PARAMS
         )
 
         fit_params = {}
@@ -370,13 +350,13 @@ class SPMFitter:
             ax.plot(1e6 * dt * X, 1e9 * line, 'r+', label='Data')
             ax.plot(
                 1e6 * dt * X,
-                1e9 * self._sine_fit_func(p0, X),
+                1e9 * fit_functions.sine_fit_func(p0, X),
                 linewidth=0.2,
                 label='Initial function',
             )
             ax.plot(
                 1e6 * dt * X,
-                1e9 * self._sine_fit_func(fit.x, X),
+                1e9 * fit_functions.sine_fit_func(fit.x, X),
                 label='Fitted function',
             )
             ax.tick_params(**TICK_PARMAMS)
@@ -417,7 +397,7 @@ class SPMFitter:
             ax.set_ylabel('Residual / nm', fontsize=6)
             ax.plot(
                 1e6 * dt * X,
-                1e9 * (self._sine_fit_func(fit.x, X) - line),
+                1e9 * (fit_functions.sine_fit_func(fit.x, X) - line),
                 label='Residual',
             )
             ax.tick_params(**TICK_PARMAMS)
@@ -519,7 +499,7 @@ if __name__ == "__main__":
     FITTER = SPMFitter('F1.002.gwy')
 
     FITTER.apply_plane_fit(plot=False)
-    
+
     print('Modulated: ', FITTER.find_modulated_area())
     print('Patterned: ', FITTER.find_patterned_area(plot=False))
     exit()
