@@ -482,5 +482,5 @@ if __name__ == "__main__":
 
     area = FITTER.find_modulated_area()
     print('Modulated: ', area)
-    print('Patterned: ', FITTER.find_patterned_area(plot=False)))
+    print('Patterned: ', FITTER.find_patterned_area(plot=False))
     # FITTER.sinosodial_fit_area(area=area, plot=True)
