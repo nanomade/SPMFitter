@@ -145,12 +145,6 @@ class SPMFitter:
             plt.show()
         return z
 
-    def apply_plane_fit(self, area=None, mask=False, plot=True):
-        fitted_plane = self._plane_fit(area, mask=mask, plot=plot)
-        self.treatments.append('Subtract global plane fit')
-        self.data = self.data - fitted_plane
-        return True
-
     def _find_modulated_lines(self):
         """
         Find the modulated lines by comparing standard deviation of all lines,
@@ -178,82 +172,78 @@ class SPMFitter:
         )
         return (low_left, top_right)
 
+    def _fit_hat_to_line(self, line_nr, plot):
+        """
+        Algorithm for identify if a line is patterned:
+        - Fit a straight line and correct for overall slope
+        - Make a list of delta-z's. If the line contains a step, this should
+          represent the largest postive and negative values in the line.
+        - If the with of the hat is small; disregard the line, otherwise proceed
+        - Using the guess found above; try to fit a top-hat function to the line;
+        - if the hat is a real hat (ie. ampitude is high compared to interline noise),
+          the line is assumed to be a patterned line. Line number and edges are
+          returned.
+        """
+        line = self.data[line_nr][:][:]
+        X = np.arange(0, len(line))
+        z = np.polyfit(X, line, 1)
+        # Correct for overall slope:
+        line = line - (X * z[0] + z[1])
+
+        delta_zs = []
+        for i in range(2, len(line)):
+            delta_z = line[i] - line[i - 2]
+            delta_zs.append(delta_z)
+        hat_start = np.argmax(delta_zs)
+        hat_stop = np.argmin(delta_zs)
+        if (hat_stop - hat_start) < len(line) / 2:
+            # This hat is obiously too small, not a patterned area
+            return
+
+        low_part = np.append(line[:hat_start], line[hat_stop:])
+        high_part = line[hat_start:hat_stop]
+        p0 = [hat_start, hat_stop, np.mean(low_part), np.mean(high_part)]
+
+        # Fit the hat as good as possible. Notice that the fit is unable to catch
+        # the non-monotomic hat kink, this is hopefully correctly catched by
+        # the initial guess if this is a patterned region
+        fit = sp.optimize.least_squares(
+            fit_functions.top_hat_error_func, p0[:], args=(X, line), **FIT_PARAMS
+        )
+
+        hat_amplitude = fit.x[3] - fit.x[2]
+        line_amplitude = line.max() - line.min()
+
+        if hat_amplitude / line_amplitude < 0.25:
+            return
+
+        if plot:
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 1, 1)
+            ax.plot(line, 'r.', label='Data')
+            ax.plot(X, fit_functions.top_hat(p0, X, line), 'b-', label='Init')
+            plt.show()
+        return hat_start, hat_stop, line_nr
+
     def find_patterned_area(self, plot=False):
+        """
+        Locate the patterned area of the sample. This is done by fitting a top-hat
+        function to every line. The fit will not work pefectly for modulated areas
+        but should work quite well outside this. Since the area is a super-set of
+        the modulated area, the corners should be correct.
+        """
         patterned_lines = []
         left_edges = []
         right_edges = []
-        # for line_nr in [88, 90, 112, 509]:
-        # for line_nr in [100, 110, 506, 508, 510, 511]:
         for line_nr in range(0, len(self.data)):
-            line = self.data[line_nr][:][:]
-            X = np.arange(0, len(line))
-            z = np.polyfit(X, line, 1)
-            line = line - (X * z[0] + z[1])
-
-            start_steps = []
-            delta_ys = []
-            for i in range(2, len(line)):
-                delta_y = line[i] - line[i - 2]
-                delta_ys.append(delta_y)
-            hat_start = np.argmax(delta_ys)
-            hat_stop = np.argmin(delta_ys)
-            if (hat_stop - hat_start) < len(line) / 2:
-                # This hat is obiously too small, not a patterned area
-                continue
-
-            low_part = np.append(line[:hat_start], line[hat_stop:])
-            high_part = line[hat_start:hat_stop]
-            p0 = [hat_start, hat_stop, np.mean(low_part), np.mean(high_part)]
-
-            # Fit the hat as best as possible. Notice that the fit is unable to catch
-            # the non-monotomic hat kink, this is hopefully correctly catched by
-            # the initial guess if this is a patterned region
-            fit = sp.optimize.least_squares(
-                fit_functions.top_hat_error_func, p0[:], args=(X, line), **FIT_PARAMS
-                #_top_hat_error_func, p0[:], args=(X, line), **FIT_PARAMS
-            )
-
-            # res = line - _top_hat(fit.x, X)
-            # print(res.std())
-            # print(fit.x)
-            hat_amplitude = fit.x[3] - fit.x[2]
-            line_amplitude = line.max() - line.min()
-
-            if hat_amplitude / line_amplitude < 0.25:
-                continue
-
-            left_edges.append(hat_start)
-            right_edges.append(hat_stop)
-            patterned_lines.append(line_nr)
-
-            # box_plot = []
-            # for x in X:
-            #    box_plot.append(_box(p0, x))
-
-            if plot:
-                fig = plt.figure()
-                ax = fig.add_subplot(1, 1, 1)
-                # ax.plot(delta_ys, 'k+', label='Delta')
-                ax.plot(line, 'r.', label='Data')
-                # ax.plot(X*z[0]+z[1], 'g-', label='Data')
-                # ax.plot(X, line, 'r+', label='Data')
-                # ax.plot(X, res, 'b-', label='Init')
-                ax.plot(X, _top_hat(p0, X), 'b-', label='Init')
-                # ax.plot(X, _box(fit.x, X), 'g-', label='Fit')
-                # ax.plot(X, box_plot, 'b-', label='Fit')
-                # for peak in real_peaks:
-                #    ax.plot(peak, line[peak], 'bo')
-                # ax.hlines(1e-8, 0, 500)
-                # ax.vlines(end_fit, line.min(), line.max())
-                plt.show()
-
-        print()
+            hat = self._fit_hat_to_line(line_nr, plot)
+            if hat:
+                patterned_lines.append(line_nr)
+                left_edges.append(hat[0])
+                right_edges.append(hat[1])
 
         left_edge = sorted(left_edges)[int(len(left_edges) * 0.2)]
         right_edge = sorted(right_edges)[int(len(right_edges) * 0.8)]
-        low_left = (left_edge, patterned_lines[-1])
-        top_right = (right_edge, patterned_lines[0])
-        # return (low_left, top_right)
         area = self._index_to_area(
             left_edge, right_edge, patterned_lines[0], patterned_lines[-1]
         )
@@ -287,26 +277,16 @@ class SPMFitter:
             ax.vlines(end_fit, line.min(), line.max())
             plt.show()
 
-        low_left = (
-            (1e6 * start_fit * self.size[0] / self.data.shape[0]),
-            (self.data.shape[1] - modulated_lines[-1])
-            * 1e6
-            * self.size[1]
-            / self.data.shape[1],
-        )
-        top_right = (
-            (1e6 * end_fit * self.size[0] / self.data.shape[0]),
-            (self.data.shape[1] - modulated_lines[0])
-            * 1e6
-            * self.size[1]
-            / self.data.shape[1],
-        )
-        #
-        # return (low_left, top_right)
         area = self._index_to_area(
             start_fit, end_fit, modulated_lines[0], modulated_lines[-1]
         )
         return area
+
+    def apply_plane_fit(self, area=None, mask=False, plot=True):
+        fitted_plane = self._plane_fit(area, mask=mask, plot=plot)
+        self.treatments.append('Subtract global plane fit')
+        self.data = self.data - fitted_plane
+        return True
 
     def fit_line(self, line, p0=None, pdfpage=None):
         dt = self.size[0] / len(self.original_data[0][:])
