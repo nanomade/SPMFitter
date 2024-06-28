@@ -304,7 +304,6 @@ class SPMFitter:
             p0 = [ampl_guess, freq_guess, phase_guess, z_mean, 0]
 
         fit = sp.optimize.least_squares(
-            # self._sine_error_func, p0[:], args=(X, line), **FIT_PARAMS
             fit_functions.sine_error_func, p0[:], args=(X, line), **FIT_PARAMS
         )
 
@@ -435,7 +434,7 @@ class SPMFitter:
         _, line_fit = self.fit_line(data[2][:][:])
         p0 = line_fit.x
         fit = sp.optimize.least_squares(
-            self._sine_error_func,
+            fit_functions.sine_error_func,
             p0[:],
             args=(X.flatten(), data.flatten()),
             **FIT_PARAMS
@@ -444,11 +443,11 @@ class SPMFitter:
 
         init_data = np.ones((data.shape[0], data.shape[1]))
         for j in np.arange(0, data.shape[1]):
-            init_data[:, j] = self._sine_fit_func(p0, j)
+            init_data[:, j] = fit_functions.sine_fit_func(p0, j)
 
         fit_data = np.ones((data.shape[0], data.shape[1]))
         for j in range(0, data.shape[1]):
-            fit_data[:, j] = self._sine_fit_func(fit.x, j)
+            fit_data[:, j] = fit_functions.sine_fit_func(fit.x, j)
 
         if plot:
             fig = plt.figure()
