@@ -470,6 +470,7 @@ class SPMFitter:
 
 if __name__ == "__main__":
     # TODO:
+    # - Significantly increase test-coverage
     # - Fix y-axis on pdf export of fits to ensure shared y-axis
     # - FFT of residuals on line fits
     # - Estimate uncertainty on roughness
