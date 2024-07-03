@@ -49,13 +49,13 @@ class SPMFitter:
         y_size = channels["ZSensor"].yreal
         return file_data, (x_size, y_size)
 
-    # def find_all_medians(self):
-    #     row_sum = np.zeros(len(self.data[1]))
-    #     for i in range(0, len(self.data[1])):
-    #         row_sum[i] = sum(self.data[:][i])
-    #     fig, ax = plt.subplots()
-    #     ax.plot(row_sum)
-    #     plt.show()
+    def _find_all_medians(self):
+        medians = []
+        for line_nr in range(0, len(self.data)):
+            line = self.data[line_nr][:][:]
+            median = np.median(line)
+            medians.append(median)
+        return medians
 
     def _find_sub_area(self, area, mask=False):
         """
@@ -478,6 +478,9 @@ if __name__ == "__main__":
 
     FITTER = SPMFitter('F1.002.gwy')
 
+    print(FITTER._find_all_medians())
+    exit()
+    
     FITTER.apply_plane_fit(plot=False)
 
     area = FITTER.find_modulated_area()
