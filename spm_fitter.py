@@ -44,17 +44,22 @@ class SPMFitter:
         channels = gwyfile.util.get_datafields(obj)
         # TODO: What about the other channels
         # TODO: Is main channel always 'ZSensor'?
-        file_data = channels["ZSensor"].data
-        x_size = channels["ZSensor"].xreal
-        y_size = channels["ZSensor"].yreal
+        if 'ZSensor' in channels:
+            key = 'ZSensor'
+        elif 'Topography' in channels:
+            key = 'Topography'
+        file_data = channels[key].data
+        x_size = channels[key].xreal
+        y_size = channels[key].yreal
         return file_data, (x_size, y_size)
 
     def _find_all_medians(self):
-        medians = []
+        medians = np.ones((self.data.shape[0], self.data.shape[1]))
+        medians[2,:] = 2
         for line_nr in range(0, len(self.data)):
             line = self.data[line_nr][:][:]
             median = np.median(line)
-            medians.append(median)
+            medians[line_nr,:] = median
         return medians
 
     def _find_sub_area(self, area, mask=False):
@@ -163,12 +168,12 @@ class SPMFitter:
 
     def _index_to_area(self, x_l, x_r, y_t, y_b):
         low_left = (
-            (1e6 * x_l * self.size[0] / self.data.shape[0]),
-            (self.data.shape[1] - y_b) * 1e6 * self.size[1] / self.data.shape[1],
+            (1e6 * x_l * self.size[0] / self.data.shape[1]),
+            (self.data.shape[0] - y_b) * 1e6 * self.size[1] / self.data.shape[0],
         )
         top_right = (
-            (1e6 * x_r * self.size[0] / self.data.shape[0]),
-            (self.data.shape[1] - y_t) * 1e6 * self.size[1] / self.data.shape[1],
+            (1e6 * x_r * self.size[0] / self.data.shape[1]),
+            (self.data.shape[0] - y_t) * 1e6 * self.size[1] / self.data.shape[0],
         )
         return (low_left, top_right)
 
@@ -251,7 +256,7 @@ class SPMFitter:
 
     def find_modulated_area(self, plot=False):
         modulated_lines = self._find_modulated_lines()
-        center_line = int(len(modulated_lines) / 2)
+        center_line = int(len(modulated_lines) / 2) + modulated_lines[0]
         line = self.data[center_line][:][:]
         peaks, properties = sp.signal.find_peaks(line, distance=5, width=5)
         real_peaks = []
@@ -282,10 +287,21 @@ class SPMFitter:
         )
         return area
 
+    def apply_data_reset(self):
+        self.data = self.original_data
+        self.treatments = []
+        return True
+
     def apply_plane_fit(self, area=None, mask=False, plot=True):
         fitted_plane = self._plane_fit(area, mask=mask, plot=plot)
         self.treatments.append('Subtract global plane fit')
         self.data = self.data - fitted_plane
+        return True
+
+    def apply_median_alignment(self):
+        medians = self._find_all_medians()
+        self.treatments.append('Median alignment')
+        self.data = self.data - medians
         return True
 
     def fit_line(self, line, p0=None, pdfpage=None):
@@ -411,7 +427,7 @@ class SPMFitter:
             if fit is None:
                 values.append(None)
             else:
-                values.append(fit_params[parameter])
+                values.append(fit_params.get(parameter))
         if pp:
             pp.close()
 
@@ -476,14 +492,21 @@ if __name__ == "__main__":
     # - Estimate uncertainty on roughness
     # - Establish unit-tests to keep regressions in check
 
-    FITTER = SPMFitter('F1.002.gwy')
+    # FITTER = SPMFitter('F1.002.gwy')
+    FITTER = SPMFitter('10_40_29_WR_sin2n_500nm_20px_15x10um_20nm_1050C.gwy')
 
-    print(FITTER._find_all_medians())
-    exit()
+    # FITTER.apply_plane_fit()
+    # area = FITTER.find_modulated_area(plot=True)
+    # print(area)
+
+    print(FITTER._index_to_area(26.5, 814.5, 49, 1118))
     
-    FITTER.apply_plane_fit(plot=False)
+    
+    # FITTER.apply_median_alignment()
+    exit()
+    FITTER.apply_plane_fit()
+    
 
-    area = FITTER.find_modulated_area()
     print('Modulated: ', area)
     print('Patterned: ', FITTER.find_patterned_area(plot=False))
     # FITTER.sinosodial_fit_area(area=area, plot=True)
