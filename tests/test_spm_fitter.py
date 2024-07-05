@@ -24,6 +24,14 @@ class TestSPMFitterFitter(unittest.TestCase):
         self.assertAlmostEqual(x_size, 1.20702e-5, delta=1e-9)
         self.assertAlmostEqual(y_size, 1.20702e-5, delta=1e-9)
 
+    def test_find_all_medians(self):
+        medians = self.fitter._find_all_medians()
+        self.assertAlmostEqual(medians[0,0], -6.407817731932293e-07, delta=1e-14)
+        self.assertAlmostEqual(medians[127,0], -5.907531755957928e-07, delta=1e-14)
+        self.assertAlmostEqual(medians[-1,0], -4.5861909865525434e-07, delta=1e-14)
+        for i in range(len(medians)):  # All values in a random line is equal 
+            self.assertEqual(medians[17,0], medians[17,i])
+        
     def test_find_modulated_lines(self):
         """
         Test that the auto-detection of modulated lines works.
