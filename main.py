@@ -33,7 +33,7 @@ class SPMPlotter:
             (0, 0), 1, 1, alpha=0.5, facecolor='r', **kwargs
         )
         self.axes['main'].add_patch(self.rectangles['patterned'])
-        self.axes['set_patterned'] = self.fig.add_axes([0.82, 0.8, 0.1, 0.025])
+        self.axes['set_patterned'] = self.fig.add_axes([0.82, 0.95, 0.1, 0.025])
         self.b_pattern = Button(self.axes['set_patterned'], 'Mark pattern')
         self.b_pattern.on_clicked(self._mark_area)
 
@@ -41,7 +41,7 @@ class SPMPlotter:
             (0, 0), 1, 1, alpha=0.7, facecolor='c', **kwargs
         )
         self.axes['main'].add_patch(self.rectangles['modulated'])
-        self.axes['set_modulated'] = self.fig.add_axes([0.82, 0.75, 0.1, 0.025])
+        self.axes['set_modulated'] = self.fig.add_axes([0.82, 0.9, 0.1, 0.025])
         self.b_modulated = Button(self.axes['set_modulated'], 'Mark modulated')
         self.b_modulated.on_clicked(self._mark_area)
 
@@ -103,13 +103,29 @@ class SPMPlotter:
     def _fit_lines(self, event):
         area = self.latest_select
         print('Fit lines, area is: ', area)
-        self.fitter.fit_to_all_lines(parameter='frequency', area=area, plot=True)
+        self.fitter.fit_to_all_lines(parameter='offset', area=area, plot=True)
 
     def _fit_area(self, event):
         plot = event.button > 1
         area = self.latest_select
         print('Fit area, area is: ', area)
         self.fitter.sinosodial_fit_area(area=area, plot=plot)
+
+    def _reset_data(self, event):
+        self.fitter.apply_data_reset()
+        self.main_plot.set_data(self.fitter.data)
+        min_val, max_val = self.fitter.data.min(), self.fitter.data.max()
+        self.main_plot.set_clim(min_val, max_val)
+        self.color_bar.mappable.set_clim(min_val, max_val)
+        self.fig.canvas.draw()
+
+    def _median_alignment(self, event):
+        self.fitter.apply_median_alignment()
+        self.main_plot.set_data(self.fitter.data)
+        min_val, max_val = self.fitter.data.min(), self.fitter.data.max()
+        self.main_plot.set_clim(min_val, max_val)
+        self.color_bar.mappable.set_clim(min_val, max_val)
+        self.fig.canvas.draw()
 
     def _plane_fit(self, event):
         # Left button: Fit selected area, right button: fit ouside selected area
@@ -140,11 +156,15 @@ class SPMPlotter:
         self._mark_area(
             event=None, rect='modulated', area=self.fitter.find_modulated_area()
         )
-        self._mark_area(
-            event=None, rect='patterned', area=self.fitter.find_patterned_area()
-        )
+        #self._mark_area(
+        #    event=None, rect='patterned', area=self.fitter.find_patterned_area()
+        #)
 
         # Action buttons:
+        self.axes['reset_data'] = self.fig.add_axes([0.82, 0.75, 0.1, 0.025])
+        b_data_reset = Button(self.axes['reset_data'], 'Reset data')
+        b_data_reset.on_clicked(self._reset_data)
+
         self.axes['show_boxes'] = self.fig.add_axes([0.82, 0.7, 0.1, 0.025])
         b_show_boxes = Button(self.axes['show_boxes'], 'Show marked')
         b_show_boxes.on_clicked(self._show_boxes)
@@ -153,15 +173,19 @@ class SPMPlotter:
         b_calc_rough = Button(self.axes['calc_roughtness'], 'Calculate roughness')
         b_calc_rough.on_clicked(self._calculate_roughness)
 
-        self.axes['plane_fit'] = self.fig.add_axes([0.82, 0.60, 0.1, 0.025])
+        self.axes['median_alignment'] = self.fig.add_axes([0.82, 0.60, 0.1, 0.025])
+        b_median_alignment = Button(self.axes['median_alignment'], 'Median alignment')
+        b_median_alignment.on_clicked(self._median_alignment)
+
+        self.axes['plane_fit'] = self.fig.add_axes([0.82, 0.55, 0.1, 0.025])
         b_plane_fit = Button(self.axes['plane_fit'], 'Plane fit')
         b_plane_fit.on_clicked(self._plane_fit)
 
-        self.axes['fit_lines'] = self.fig.add_axes([0.82, 0.55, 0.1, 0.025])
+        self.axes['fit_lines'] = self.fig.add_axes([0.82, 0.50, 0.1, 0.025])
         b_fit_lines = Button(self.axes['fit_lines'], 'Fit lines')
         b_fit_lines.on_clicked(self._fit_lines)
 
-        self.axes['area_fit'] = self.fig.add_axes([0.82, 0.50, 0.1, 0.025])
+        self.axes['area_fit'] = self.fig.add_axes([0.82, 0.45, 0.1, 0.025])
         b_fit_area = Button(self.axes['area_fit'], 'Fit area')
         b_fit_area.on_clicked(self._fit_area)
 
@@ -169,6 +193,7 @@ class SPMPlotter:
 
 
 if __name__ == "__main__":
-    PLOTTER = SPMPlotter("F1.002.gwy")
+    # PLOTTER = SPMPlotter("F1.002.gwy")
+    PLOTTER = SPMPlotter('10_40_29_WR_sin2n_500nm_20px_15x10um_20nm_1050C.gwy')
 
     PLOTTER.plot_data()
