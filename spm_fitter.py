@@ -23,7 +23,8 @@ FIT_PARAMS = {
     'jac': '2-point',
     'ftol': 1e-14,
     'xtol': 1e-14,
-    'max_nfev': 20000,
+    # 'max_nfev': 20000,
+    'max_nfev': 1000,
 }
 
 
@@ -483,6 +484,81 @@ class SPMFitter:
             fig.colorbar(r)
         plt.show()
 
+    def sinosodial_2d_fit_area(self, area, plot=False):
+        if area is None:
+            print('You need to select an area')
+            return
+        data = self._find_sub_area(area)
+
+        # We absolutely need better inital guess.
+        # A better strategy would be:
+        # 1) Fit a sine to a single x-row
+        # 2) Using the fitted amplitude, fit a single y-row
+        # 3) This should give good estimates for both frequency
+        #    and phase along both axis
+        # 4) Do the 2d-fit
+        
+        # https://gist.github.com/RustingSword/e22a11e1d391f2ab1f2c
+        X, Y = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
+        # We need a good guess for p0; fit_line actually is quite decent at guessing
+        # ab-initio, so we simply pick a random line as starting guess for the 2d-fit
+        print('----')
+        line_x = data[20, :]
+        _, line_fit = self.fit_line(line_x)
+        p0 = line_fit.x
+        print(p0)
+
+        line_y = data[:, 20]
+        _, line_fit = self.fit_line(line_y)
+        p0 = line_fit.x
+        print(p0)
+        print('----')
+        
+        # p0 = [-2.293e-08, 2.512e-01, 1.280e+01, 2.512e-01, 1.280e+01]
+        # p0 = [2.293e-08, 2.512e-01, 8, 1.212e-01, 17]
+        p0 = [2.512e-01, 8, 1.212e-01, 17]
+
+        #[-2.18410963e-08  2.51185533e-01  1.28050753e+01  7.51508893e-09
+        # -1.46202976e-12]
+        #[ 2.17492500e-08  1.25696777e-01  1.73213451e+01  9.09819537e-09
+        #-1.17967141e-13]
+
+
+        fit = sp.optimize.least_squares(
+            fit_functions.sine_2d_error_func,
+            p0[:],
+            args=(X.flatten(), Y.flatten(), data.flatten()),
+            **FIT_PARAMS
+        )
+        print(fit)
+
+        fit_data = np.ones((data.shape[0], data.shape[1]))
+        # for j in range(0, data.shape[1]):
+        #     fit_data[:, j] = fit_functions.sine_fit_func(fit.x, j)
+        for j in range(0, data.shape[1]):
+            for i in range(0, data.shape[0]):
+                fit_data[i, j] = fit_functions.sine_2d_fit_func(fit.x, i, j)
+                # fit_data[i, j] = fit_functions.sine_2d_fit_func(p0, i, j)
+
+        if plot:
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 3, 1)
+            d = ax.imshow(data, interpolation='none', origin='upper')
+            d.set_clim(data.min(), data.max())
+            fig.colorbar(d)
+
+            ax = fig.add_subplot(1, 3, 2)
+            f = ax.imshow(fit_data, interpolation='none', origin='upper')
+            f.set_clim(data.min(), data.max())
+            # f.set_clim(fit_data.min(), fit_data.max())
+            fig.colorbar(f)
+
+            ax = fig.add_subplot(1, 3, 3)
+            r = ax.imshow(data - fit_data, interpolation='none', origin='upper')
+            r.set_clim(data.min(), data.max())
+            fig.colorbar(r)
+        plt.show()
+
 
 if __name__ == "__main__":
     # TODO:
@@ -495,11 +571,17 @@ if __name__ == "__main__":
     # FITTER = SPMFitter('F1.002.gwy')
     FITTER = SPMFitter('10_40_29_WR_sin2n_500nm_20px_15x10um_20nm_1050C.gwy')
 
+    FITTER.apply_plane_fit(plot=False)
+    
+    area = ((0.83, 0.5), (10.29, 10.19))
+    FITTER.sinosodial_2d_fit_area(area=area, plot=True)
+
+    
     # FITTER.apply_plane_fit()
     # area = FITTER.find_modulated_area(plot=True)
     # print(area)
 
-    print(FITTER._index_to_area(26.5, 814.5, 49, 1118))
+    # print(FITTER._index_to_area(26.5, 814.5, 49, 1118))
     
     
     # FITTER.apply_median_alignment()

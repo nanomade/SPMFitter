@@ -4,8 +4,17 @@ def sine_fit_func(p, x):
     value = p[0] * np.sin(p[1] * x + p[2]) + p[3] + p[4] * x
     return value
 
-def sine_error_func(p, x, y):
-    error = sine_fit_func(p, x) - y
+def sine_2d_fit_func(p, x, y):
+    # value = p[0] * (np.sin(p[1] * x + p[2]) * np.sin(p[3] * y + p[4]))
+    value = 4.293e-08 * (np.sin(p[0] * x + p[1]) * np.sin(p[2] * y + p[3]))
+    return value
+
+def sine_error_func(p, x, z):
+    error = sine_fit_func(p, x) - z
+    return error
+
+def sine_2d_error_func(p, x, y, z):
+    error = sine_2d_fit_func(p, x, y) - z
     return error
 
 def top_hat(p, x, line):
