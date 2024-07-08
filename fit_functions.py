@@ -5,8 +5,7 @@ def sine_fit_func(p, x):
     return value
 
 def sine_2d_fit_func(p, x, y):
-    # value = p[0] * (np.sin(p[1] * x + p[2]) * np.sin(p[3] * y + p[4]))
-    value = 4.293e-08 * (np.sin(p[0] * x + p[1]) * np.sin(p[2] * y + p[3]))
+    value = p[0] * np.sin(p[1] * x + p[2]) + p[3] * np.sin(p[4] * y + p[5])
     return value
 
 def sine_error_func(p, x, z):
@@ -15,7 +14,10 @@ def sine_error_func(p, x, z):
 
 def sine_2d_error_func(p, x, y, z):
     error = sine_2d_fit_func(p, x, y) - z
+    # rms = np.sqrt(np.mean(error**2))
+    # print('Optimizer! Error is: ', rms)
     return error
+
 
 def top_hat(p, x, line):
     # p[0]: End of first low part of hat

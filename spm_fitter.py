@@ -19,10 +19,12 @@ TICK_PARMAMS = {  # This should go to a file with defaults
 }
 
 FIT_PARAMS = {
-    'method': 'lm',
+    # 'method': 'lm',
+    'method': 'trf',
     'jac': '2-point',
-    'ftol': 1e-14,
-    'xtol': 1e-14,
+    'ftol': 1e-15,
+    'xtol': 1e-15,
+    'gtol': 1e-15,
     # 'max_nfev': 20000,
     'max_nfev': 1000,
 }
@@ -178,6 +180,7 @@ class SPMFitter:
         )
         return (low_left, top_right)
 
+    # TODO!!! Look into the pip-package ruptures!!!
     def _fit_hat_to_line(self, line_nr, plot):
         """
         Algorithm for identify if a line is patterned:
@@ -307,23 +310,83 @@ class SPMFitter:
 
     def fit_line(self, line, p0=None, pdfpage=None):
         dt = self.size[0] / len(self.original_data[0][:])
-        X = np.arange(0, len(line))
+        X = np.arange(0, len(line))            
+        
+        z_mean = sum(line) / len(line)
+        ampl_guess = max(line) - z_mean
 
+        # Primitve home-made peak finder. Seems to be more robust
+        # for slow sines than sp.signal.find_peaks
+        peaks = []
+        current_value = line[0]
+        i = 0
+        while i < len(line):
+            if line[i] > current_value:
+                current_value = line[i]
+                i = i + 1
+            else:
+                current_value = -100000
+                if i > 0:
+                    peaks.append(i - 1)
+                try:
+                    while line[i] > z_mean:
+                        i = i + 1
+                    while line[i] < z_mean:
+                        i = i + 1
+                except IndexError:
+                    break
+                
+        
         if p0 is None:
-            peaks, _ = sp.signal.find_peaks(line, distance=20)
+            # peaks, _ = sp.signal.find_peaks(line, distance=5, height=0)
             # A decent guess for frequency is to distribute all peaks acress the line
             freq_guess = len(peaks) * 2 * np.pi / len(line)
             # We fit a sine, zero should be a quater period offset
-            phase_guess = peaks[0] - (peaks[1] - peaks[0]) / 4
+            try:
+                phase_guess = peaks[0] - (peaks[1] - peaks[0]) / 4
+            except IndexError:
+                phase_guess = 0
             # Amplitude guess is simply max minus min
-            z_mean = sum(line) / len(line)
-            ampl_guess = max(line) - z_mean
             p0 = [ampl_guess, freq_guess, phase_guess, z_mean, 0]
 
+        # The peak of the fft is exactly the peak count when the peaks are
+        # found correctly. The frequency guess is thus quite good, if we have
+        # problems with the fit, the phase guess seems to be place the look
+        fft = sp.fft.fft(line - z_mean)
+        xf = sp.fft.fftfreq(len(line), dt)[:len(fft)//2]
+        # print('Number of peaks: ', len(peaks))
+        # print()
+        # print('Fit-p0: ', p0)
+        bounds = [[ampl_guess * 0.75, -10, -250, -1, -1], [ampl_guess * 1.25, 10, 250, 1, 1]]
+        # print()
+        # print(bounds)
         fit = sp.optimize.least_squares(
-            fit_functions.sine_error_func, p0[:], args=(X, line), **FIT_PARAMS
+            fit_functions.sine_error_func, p0[:], args=(X, line), bounds=bounds, **FIT_PARAMS
         )
 
+        # fig = plt.figure()
+        #ax = fig.add_subplot(2, 1, 2)
+        # ax.plot(xf, np.abs(fft)[0:len(fft)//2])
+        
+        #  ax = fig.add_subplot(2, 1, 1)
+        # for peak in peaks:
+        #     ax.plot(peak * dt * 1e6, 1e9 * line[peak], 'bo')
+
+        #ax.plot(1e6 * dt * X, 1e9 * line, 'r+', label='Data')
+        # ax.plot(
+        #     1e6 * dt * X,
+        #     1e9 * fit_functions.sine_fit_func(p0, X),
+        #     linewidth=0.2,
+        #     label='Initial function',
+        # )
+        # ax.plot(
+        #     1e6 * dt * X,
+        #     1e9 * fit_functions.sine_fit_func(fit.x, X),
+        #     label='Fitted function',
+        # )
+        # plt.legend()
+        # plt.show()
+        
         fit_params = {}
         if fit.status > 0:
             fit_params = {
@@ -493,7 +556,7 @@ class SPMFitter:
         # We absolutely need better inital guess.
         # A better strategy would be:
         # 1) Fit a sine to a single x-row
-        # 2) Using the fitted amplitude, fit a single y-row
+        # 2) Fit a sine to a single y-row
         # 3) This should give good estimates for both frequency
         #    and phase along both axis
         # 4) Do the 2d-fit
@@ -502,43 +565,114 @@ class SPMFitter:
         X, Y = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
         # We need a good guess for p0; fit_line actually is quite decent at guessing
         # ab-initio, so we simply pick a random line as starting guess for the 2d-fit
-        print('----')
-        line_x = data[20, :]
+
+        # print('----')
+        line_nr = 21
+
+        line_x = data[line_nr, :]
         _, line_fit = self.fit_line(line_x)
-        p0 = line_fit.x
-        print(p0)
+        p0_y = line_fit.x
 
-        line_y = data[:, 20]
-        _, line_fit = self.fit_line(line_y)
-        p0 = line_fit.x
-        print(p0)
-        print('----')
+        p0_x = None
+        # for line_nr in range(20, 21):
+        line_y = data[:, line_nr]
+        _, line_fit = self.fit_line(line_y, p0_x)
+        p0_x = line_fit.x
+       
+        p0 = [
+            p0_x[0], p0_x[1], p0_x[2],
+            p0_y[0], p0_y[1], p0_y[2]
+        ]
+        print('p0: ', p0)
+
+        bounds = [
+            [
+                p0[0] * 0.99,
+                p0[1] * 0.99,
+                p0[2] * 0.99,
+                p0[3] * 0.99,
+                p0[4] * 0.99,
+                p0[5] * 0.99,
+            ],
+            [
+                p0[0] * 1.01,
+                p0[1] * 1.01,
+                p0[2] * 1.01, 
+                p0[3] * 1.01,
+                p0[4] * 1.01,
+                p0[5] * 1.01,
+            ]
+        ]
+        # fit = sp.optimize.least_squares(
+        #    fit_functions.sine_2d_error_func,
+        #    p0[:],
+        #    args=(X.flatten(), Y.flatten(), data.flatten()),
+        #    bounds=bounds,
+        #    **FIT_PARAMS
+        #)
+        # print(fit)
+
+
         
-        # p0 = [-2.293e-08, 2.512e-01, 1.280e+01, 2.512e-01, 1.280e+01]
-        # p0 = [2.293e-08, 2.512e-01, 8, 1.212e-01, 17]
-        p0 = [2.512e-01, 8, 1.212e-01, 17]
-
-        #[-2.18410963e-08  2.51185533e-01  1.28050753e+01  7.51508893e-09
-        # -1.46202976e-12]
-        #[ 2.17492500e-08  1.25696777e-01  1.73213451e+01  9.09819537e-09
-        #-1.17967141e-13]
-
-
-        fit = sp.optimize.least_squares(
-            fit_functions.sine_2d_error_func,
-            p0[:],
-            args=(X.flatten(), Y.flatten(), data.flatten()),
-            **FIT_PARAMS
-        )
-        print(fit)
-
         fit_data = np.ones((data.shape[0], data.shape[1]))
         # for j in range(0, data.shape[1]):
         #     fit_data[:, j] = fit_functions.sine_fit_func(fit.x, j)
         for j in range(0, data.shape[1]):
             for i in range(0, data.shape[0]):
-                fit_data[i, j] = fit_functions.sine_2d_fit_func(fit.x, i, j)
-                # fit_data[i, j] = fit_functions.sine_2d_fit_func(p0, i, j)
+                # fit_data[i, j] = fit_functions.sine_2d_fit_func(fit.x, i, j)
+                fit_data[i, j] = fit_functions.sine_2d_fit_func(p0, i, j)
+
+        residual = data - fit_data
+        print('RMS error: ', np.sqrt(np.mean(residual**2)))
+
+        plot = True
+        if plot:
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 3, 1)
+            d = ax.imshow(data, interpolation='none', origin='upper')
+            d.set_clim(data.min(), data.max())
+            fig.colorbar(d)
+
+            ax = fig.add_subplot(1, 3, 2)
+            f = ax.imshow(fit_data, interpolation='none', origin='upper')
+            f.set_clim(data.min(), data.max())
+            # f.set_clim(fit_data.min(), fit_data.max())
+            fig.colorbar(f)
+            
+            ax = fig.add_subplot(1, 3, 3)
+            r = ax.imshow(residual, interpolation='none', origin='upper')
+            r.set_clim(data.min(), data.max())
+            fig.colorbar(r)
+        plt.show()
+
+    def _sinosodial_2d_fit_from_line(self, area, line_nr, plot=False):
+        if area is None:
+            print('You need to select an area')
+            return
+        data = self._find_sub_area(area)
+
+        X, Y = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
+        line_x = data[line_nr, :]
+        _, line_fit = self.fit_line(line_x)
+        p0_y = line_fit.x
+
+        line_y = data[:, line_nr]
+        _, line_fit = self.fit_line(line_y)
+        p0_x = line_fit.x
+       
+        p0 = [
+            p0_x[0], p0_x[1], p0_x[2],
+            p0_y[0], p0_y[1], p0_y[2]
+        ]
+
+        fit_data = np.ones((data.shape[0], data.shape[1]))
+        for j in range(0, data.shape[1]):
+            for i in range(0, data.shape[0]):
+                fit_data[i, j] = fit_functions.sine_2d_fit_func(p0, i, j)
+
+        residual = data - fit_data
+        rms = np.sqrt(np.mean(residual**2))
+        print('L: ', line_nr, '  RMS error: ', rms)
 
         if plot:
             fig = plt.figure()
@@ -552,13 +686,13 @@ class SPMFitter:
             f.set_clim(data.min(), data.max())
             # f.set_clim(fit_data.min(), fit_data.max())
             fig.colorbar(f)
-
+            
             ax = fig.add_subplot(1, 3, 3)
-            r = ax.imshow(data - fit_data, interpolation='none', origin='upper')
-            r.set_clim(data.min(), data.max())
+            r = ax.imshow(residual, interpolation='none', origin='upper')
+            # r.set_clim(data.min(), data.max())
             fig.colorbar(r)
-        plt.show()
-
+            plt.show()
+        return rms
 
 if __name__ == "__main__":
     # TODO:
@@ -573,10 +707,23 @@ if __name__ == "__main__":
 
     FITTER.apply_plane_fit(plot=False)
     
-    area = ((0.83, 0.5), (10.29, 10.19))
-    FITTER.sinosodial_2d_fit_area(area=area, plot=True)
+    # area = ((0.83, 0.5), (10.29, 10.19))
+    area = ((2, 2), (7, 7))
+    # FITTER.sinosodial_2d_fit_area(area=area, plot=True)
 
-    
+    rms = FITTER._sinosodial_2d_fit_from_line(area=area, line_nr=301, plot=True)
+    exit()
+
+    rms_min = 1
+    min_line_nr = None
+    for line_nr in range(0, 343):
+        rms = FITTER._sinosodial_2d_fit_from_line(area=area, line_nr=line_nr, plot=False)
+        if rms < rms_min:
+            rms_min = rms
+            min_line_nr = line_nr
+    print()
+    print()
+    print(min_line_nr, rms_min)
     # FITTER.apply_plane_fit()
     # area = FITTER.find_modulated_area(plot=True)
     # print(area)
