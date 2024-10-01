@@ -1,3 +1,4 @@
 scipy
 gwyfile
+ruptures
 matplotlib
