@@ -1,6 +1,7 @@
 import multiprocessing  # To be used for faster fitting
 
 import gwyfile
+import ruptures as rpt 
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
@@ -31,6 +32,11 @@ class SPMFitter:
     def __init__(self, filename):
         # Raw data as read from file
         self.original_data, self.size = self._load_file(filename)
+
+        # TODO!!!! THIS SHOULD BE DONE AUTOMATICALLY!!!!!!!!!!!
+        # self.original_data = sp.ndimage.rotate(self.original_data, 1.3)  # AFM
+        self.original_data = sp.ndimage.rotate(self.original_data, 0)  # NF
+
         self.patterend_region = None
         self.modulated_region = None
 
@@ -258,26 +264,19 @@ class SPMFitter:
         modulated_lines = self._find_modulated_lines()
         center_line = int(len(modulated_lines) / 2) + modulated_lines[0]
         line = self.data[center_line][:][:]
-        peaks, properties = sp.signal.find_peaks(line, distance=5, width=5)
-        real_peaks = []
-        for peak in peaks:
-            if (line[peak] - line.mean()) > 0:
-                real_peaks.append(peak)
-        first_peak = real_peaks[0]
-        last_peak = real_peaks[-1]
-        period = real_peaks[1] - real_peaks[0]
-
-        start_fit = first_peak - period / 4
-        end_fit = last_peak + period / 4
+        
+        # todo: Read up on ruptures, the parameters are currently not
+        # well understood.
+        algo = rpt.Pelt(model="rbf").fit(line)
+        result = algo.predict(pen=10)
+        start_fit = result[0]
+        end_fit = result[-2]
+        
         if plot:
-            print('First peak: {}. Last peak: {}'.format(first_peak, last_peak))
             fig = plt.figure()
             ax = fig.add_subplot(1, 1, 1)
             X = np.arange(0, len(line))
             ax.plot(X, line, 'r+', label='Data')
-            for peak in real_peaks:
-                ax.plot(peak, line[peak], 'bo')
-
             ax.vlines(start_fit, line.min(), line.max())
             ax.vlines(end_fit, line.min(), line.max())
             plt.show()
@@ -486,6 +485,12 @@ class SPMFitter:
 
 if __name__ == "__main__":
     # TODO:
+    # - Make line fit much more robust
+    # - Handle case with and without a patterned non-modulated area
+    # - Implement ruptures to find the modulated area
+    # - Handle rotation automatically
+    # - Deal correctly with non-square images
+    
     # - Significantly increase test-coverage
     # - Fix y-axis on pdf export of fits to ensure shared y-axis
     # - FFT of residuals on line fits
@@ -493,12 +498,15 @@ if __name__ == "__main__":
     # - Establish unit-tests to keep regressions in check
 
     # FITTER = SPMFitter('F1.002.gwy')
-    FITTER = SPMFitter('10_40_29_WR_sin2n_500nm_20px_15x10um_20nm_1050C.gwy')
-
+    # FITTER = SPMFitter('10_40_29_WR_sin2n_500nm_20px_15x10um_20nm_1050C.gwy')
+    # FITTER = SPMFitter('sample_images/camilla_thesis_afm.gwy')
+    FITTER = SPMFitter('sample_images/camilla_thesis_nf.gwy')
+    
     # FITTER.apply_plane_fit()
-    # area = FITTER.find_modulated_area(plot=True)
+    area = FITTER.find_modulated_area(plot=True)
     # print(area)
 
+    exit()
     print(FITTER._index_to_area(26.5, 814.5, 49, 1118))
     
     
