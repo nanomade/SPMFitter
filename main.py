@@ -156,6 +156,8 @@ class SPMPlotter:
         self._mark_area(
             event=None, rect='modulated', area=self.fitter.find_modulated_area()
         )
+
+        # TODO!!! NOT ALL IMAGES HAS A PATTERNED AREA - POSSIBLY VERY FEW!
         #self._mark_area(
         #    event=None, rect='patterned', area=self.fitter.find_patterned_area()
         #)
@@ -194,6 +196,9 @@ class SPMPlotter:
 
 if __name__ == "__main__":
     # PLOTTER = SPMPlotter("F1.002.gwy")
-    PLOTTER = SPMPlotter('10_40_29_WR_sin2n_500nm_20px_15x10um_20nm_1050C.gwy')
-
+    # PLOTTER = SPMPlotter('10_40_29_WR_sin2n_500nm_20px_15x10um_20nm_1050C.gwy')
+    
+    PLOTTER = SPMPlotter('sample_images/camilla_thesis_nf.gwy')
+    # PLOTTER = SPMPlotter('sample_images/camilla_thesis_afm.gwy')
+    
     PLOTTER.plot_data()
