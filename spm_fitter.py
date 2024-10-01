@@ -156,21 +156,23 @@ class SPMFitter:
             plt.show()
         return z
 
-    def _find_modulated_lines(self):
-        """
-        Find the modulated lines by comparing standard deviation of all lines,
-        if it is higher than average, it is should be part of the modulation
-        """
-        stds = np.empty(len(self.data))
-        for line_nr in range(0, len(self.data)):
-            stds[line_nr] = self.data[line_nr][:][:].std()
+    # def _find_modulated_lines(self):
+    #     """
+    #     THIS IS MOST LIKELY NOW OBSELETE. RUPTURES CAN DO BETTER AND THIS IS
+    #     HIGHLY SENSITIVE TO NOICE AN IRREGULARITIES OUTSIDE OF MAIN AREA
+    #     Find the modulated lines by comparing standard deviation of all lines,
+    #     if it is higher than average, it is should be part of the modulation
+    #     """
+    #     stds = np.empty(len(self.data))
+    #     for line_nr in range(0, len(self.data)):
+    #         stds[line_nr] = self.data[line_nr][:][:].std()
 
-        mean_std = stds.mean()
-        modulated_lines = []
-        for line_nr in range(0, len(self.data)):
-            if stds[line_nr] > mean_std * 0.9:
-                modulated_lines.append(line_nr)
-        return modulated_lines
+    #     mean_std = stds.mean()
+    #     modulated_lines = []
+    #     for line_nr in range(0, len(self.data)):
+    #         if stds[line_nr] > mean_std * 0.9:
+    #             modulated_lines.append(line_nr)
+    #     return modulated_lines
 
     def _index_to_area(self, x_l, x_r, y_t, y_b):
         low_left = (
@@ -183,58 +185,59 @@ class SPMFitter:
         )
         return (low_left, top_right)
 
-    def _fit_hat_to_line(self, line_nr, plot):
-        """
-        Algorithm for identify if a line is patterned:
-        - Fit a straight line and correct for overall slope
-        - Make a list of delta-z's. If the line contains a step, this should
-          represent the largest postive and negative values in the line.
-        - If the with of the hat is small; disregard the line, otherwise proceed
-        - Using the guess found above; try to fit a top-hat function to the line;
-        - if the hat is a real hat (ie. ampitude is high compared to interline noise),
-          the line is assumed to be a patterned line. Line number and edges are
-          returned.
-        """
-        line = self.data[line_nr][:][:]
-        X = np.arange(0, len(line))
-        z = np.polyfit(X, line, 1)
-        # Correct for overall slope:
-        line = line - (X * z[0] + z[1])
+    # def _fit_hat_to_line(self, line_nr, plot):
+    #     """
+    #     MOST LIKELY THIS CAN ALSO BE REPLACED BY RUPTURES!!!!!!!!!!!!!
+    #     Algorithm for identify if a line is patterned:
+    #     - Fit a straight line and correct for overall slope
+    #     - Make a list of delta-z's. If the line contains a step, this should
+    #       represent the largest postive and negative values in the line.
+    #     - If the with of the hat is small; disregard the line, otherwise proceed
+    #     - Using the guess found above; try to fit a top-hat function to the line;
+    #     - if the hat is a real hat (ie. ampitude is high compared to interline noise),
+    #       the line is assumed to be a patterned line. Line number and edges are
+    #       returned.
+    #     """
+    #     line = self.data[line_nr][:][:]
+    #     X = np.arange(0, len(line))
+    #     z = np.polyfit(X, line, 1)
+    #     # Correct for overall slope:
+    #     line = line - (X * z[0] + z[1])
 
-        delta_zs = []
-        for i in range(2, len(line)):
-            delta_z = line[i] - line[i - 2]
-            delta_zs.append(delta_z)
-        hat_start = np.argmax(delta_zs)
-        hat_stop = np.argmin(delta_zs)
-        if (hat_stop - hat_start) < len(line) / 2:
-            # This hat is obiously too small, not a patterned area
-            return
+    #     delta_zs = []
+    #     for i in range(2, len(line)):
+    #         delta_z = line[i] - line[i - 2]
+    #         delta_zs.append(delta_z)
+    #     hat_start = np.argmax(delta_zs)
+    #     hat_stop = np.argmin(delta_zs)
+    #     if (hat_stop - hat_start) < len(line) / 2:
+    #         # This hat is obiously too small, not a patterned area
+    #         return
 
-        low_part = np.append(line[:hat_start], line[hat_stop:])
-        high_part = line[hat_start:hat_stop]
-        p0 = [hat_start, hat_stop, np.mean(low_part), np.mean(high_part)]
+    #     low_part = np.append(line[:hat_start], line[hat_stop:])
+    #     high_part = line[hat_start:hat_stop]
+    #     p0 = [hat_start, hat_stop, np.mean(low_part), np.mean(high_part)]
 
-        # Fit the hat as good as possible. Notice that the fit is unable to catch
-        # the non-monotomic hat kink, this is hopefully correctly catched by
-        # the initial guess if this is a patterned region
-        fit = sp.optimize.least_squares(
-            fit_functions.top_hat_error_func, p0[:], args=(X, line), **FIT_PARAMS
-        )
+    #     # Fit the hat as good as possible. Notice that the fit is unable to catch
+    #     # the non-monotomic hat kink, this is hopefully correctly catched by
+    #     # the initial guess if this is a patterned region
+    #     fit = sp.optimize.least_squares(
+    #         fit_functions.top_hat_error_func, p0[:], args=(X, line), **FIT_PARAMS
+    #     )
 
-        hat_amplitude = fit.x[3] - fit.x[2]
-        line_amplitude = line.max() - line.min()
+    #     hat_amplitude = fit.x[3] - fit.x[2]
+    #     line_amplitude = line.max() - line.min()
 
-        if hat_amplitude / line_amplitude < 0.25:
-            return
+    #     if hat_amplitude / line_amplitude < 0.25:
+    #         return
 
-        if plot:
-            fig = plt.figure()
-            ax = fig.add_subplot(1, 1, 1)
-            ax.plot(line, 'r.', label='Data')
-            ax.plot(X, fit_functions.top_hat(p0, X, line), 'b-', label='Init')
-            plt.show()
-        return hat_start, hat_stop, line_nr
+    #     if plot:
+    #         fig = plt.figure()
+    #         ax = fig.add_subplot(1, 1, 1)
+    #         ax.plot(line, 'r.', label='Data')
+    #         ax.plot(X, fit_functions.top_hat(p0, X, line), 'b-', label='Init')
+    #         plt.show()
+    #     return hat_start, hat_stop, line_nr
 
     def find_patterned_area(self, plot=False):
         """
@@ -260,18 +263,18 @@ class SPMFitter:
         )
         return area
 
-    def find_modulated_area(self, plot=False):
-        modulated_lines = self._find_modulated_lines()
-        center_line = int(len(modulated_lines) / 2) + modulated_lines[0]
-        line = self.data[center_line][:][:]
-        
-        # todo: Read up on ruptures, the parameters are currently not
-        # well understood.
-        algo = rpt.Pelt(model="rbf").fit(line)
-        result = algo.predict(pen=10)
+    def _find_rupture_points(self, line, plot=False):
+        # We know this line has exactly two jumps => Dynp is a good model
+        # jump=3 seems a good compromise between robustness and not
+        # missing too much data
+        algo = rpt.Dynp(model='l2', min_size=20, jump=3).fit(line)
+        result = algo.predict(n_bkps=2)
+
         start_fit = result[0]
+        # result[-1] is pr definition the last point
         end_fit = result[-2]
-        
+        print('start: {}, end: {}'.format(start_fit, end_fit))
+
         if plot:
             fig = plt.figure()
             ax = fig.add_subplot(1, 1, 1)
@@ -280,9 +283,72 @@ class SPMFitter:
             ax.vlines(start_fit, line.min(), line.max())
             ax.vlines(end_fit, line.min(), line.max())
             plt.show()
+        return start_fit, end_fit
+
+    def find_modulated_area(self, plot=False):
+        
+        def _find_axis_endpoints(axis):
+            # TODO: MULTIPROCESSING!!!!!!!!!!!!
+            found_endpoints = {}
+            if axis == 'x':
+                center = self.data.shape[1] // 2        
+            else:
+                center = self.data.shape[1] // 2        
+            for line_nr in range(center - 20, center + 20, 3):
+                if axis == 'x':
+                    line = self.data[line_nr, :]
+                else:
+           start, end = self._find_rupture_points(y_line, plot=False)
+           if (start, end) in found_endpoints:
+               found_endpoints[(start, end)] += 1
+           else:
+               found_endpoints[(start, end)] = 1
+       max_count = 0
+       for end_points, count in found_endpoints.items():
+           if count > max_count:
+               found_endpoints = end_points
+               max_count = count
+            
+        
+        found_endpoints = {}
+        y_center = self.data.shape[0] // 2        
+        # TODO: MULTIPROCESSING!!!!!!!!!!!!
+        for y_line_nr in range(y_center - 20, y_center + 20, 3):
+            y_line = self.data[:, y_line_nr]
+            start, end = self._find_rupture_points(y_line, plot=False)
+            if (start, end) in found_endpoints:
+                found_endpoints[(start, end)] += 1
+            else:
+                found_endpoints[(start, end)] = 1
+        max_count = 0
+        for end_points, count in found_endpoints.items():
+            if count > max_count:
+                found_endpoints = end_points
+                max_count = count
+        found_endpoints_y = found_endpoints
+       
+        found_endpoints = {}
+        x_center = self.data.shape[1] // 2        
+        # TODO: MULTIPROCESSING!!!!!!!!!!!!
+        for x_line_nr in range(x_center - 20, x_center + 20, 3):
+            x_line = self.data[x_line_nr, :]
+            start, end = self._find_rupture_points(x_line, plot=False)
+            if (start, end) in found_endpoints:
+                found_endpoints[(start, end)] += 1
+            else:
+                found_endpoints[(start, end)] = 1
+        max_count = 0
+        for end_points, count in found_endpoints.items():
+            if count > max_count:
+                found_endpoints = end_points
+                max_count = count
+        found_endpoints_x = found_endpoints
 
         area = self._index_to_area(
-            start_fit, end_fit, modulated_lines[0], modulated_lines[-1]
+            found_endpoints_x[0],
+            found_endpoints_x[1],
+            found_endpoints_y[0],
+            found_endpoints_y[1],
         )
         return area
 
@@ -506,15 +572,15 @@ if __name__ == "__main__":
     area = FITTER.find_modulated_area(plot=True)
     # print(area)
 
-    exit()
-    print(FITTER._index_to_area(26.5, 814.5, 49, 1118))
+    
+    #print(FITTER._index_to_area(26.5, 814.5, 49, 1118))
     
     
     # FITTER.apply_median_alignment()
-    exit()
-    FITTER.apply_plane_fit()
+    #exit()
+    #FITTER.apply_plane_fit()
     
 
-    print('Modulated: ', area)
-    print('Patterned: ', FITTER.find_patterned_area(plot=False))
+    #print('Modulated: ', area)
+    #print('Patterned: ', FITTER.find_patterned_area(plot=False))
     # FITTER.sinosodial_fit_area(area=area, plot=True)
