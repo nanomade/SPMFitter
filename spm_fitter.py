@@ -191,7 +191,7 @@ class SPMFitter:
             plt.show()
         return start_fit, end_fit
 
-    def _find_axis_endpoints(self, axis):
+    def _find_axis_endpoints(self, axis, plot=False):
         found_endpoints = {}
         if axis == 'x':
             center = self.data.shape[1] // 2
@@ -202,7 +202,7 @@ class SPMFitter:
                 line = self.data[line_nr, :]
             else:
                 line = self.data[:, line_nr]
-            start, end = self._find_rupture_points(line, plot=False)
+            start, end = self._find_rupture_points(line, plot=plot)
             if (start, end) in found_endpoints:
                 found_endpoints[(start, end)] += 1
             else:
@@ -218,8 +218,8 @@ class SPMFitter:
     def find_modulated_area(self, plot=False):
         # TODO: MULTIPROCESSING!!!!!!!!!!!!
         # These fits can be done in parallel
-        found_endpoints_x = self._find_axis_endpoints('x')
-        found_endpoints_y = self._find_axis_endpoints('y')
+        found_endpoints_x = self._find_axis_endpoints('x', plot)
+        found_endpoints_y = self._find_axis_endpoints('y', plot)
         area = self._index_to_area(
             found_endpoints_x[0],
             found_endpoints_x[1],
@@ -444,18 +444,8 @@ if __name__ == "__main__":
     FITTER = SPMFitter('sample_images/camilla_thesis_nf.gwy')
     
     # FITTER.apply_plane_fit()
-    area = FITTER.find_modulated_area(plot=True)
+    area = FITTER.find_modulated_area(plot=False)
     # print(area)
 
-    
-    #print(FITTER._index_to_area(26.5, 814.5, 49, 1118))
-    
-    
-    # FITTER.apply_median_alignment()
-    #exit()
-    #FITTER.apply_plane_fit()
-    
-
-    #print('Modulated: ', area)
-    #print('Patterned: ', FITTER.find_patterned_area(plot=False))
-    # FITTER.sinosodial_fit_area(area=area, plot=True)
+ 
+ 
