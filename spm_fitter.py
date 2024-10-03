@@ -285,65 +285,35 @@ class SPMFitter:
             plt.show()
         return start_fit, end_fit
 
-    def find_modulated_area(self, plot=False):
-        
-        def _find_axis_endpoints(axis):
-            # TODO: MULTIPROCESSING!!!!!!!!!!!!
-            found_endpoints = {}
+    def _find_axis_endpoints(self, axis):
+        found_endpoints = {}
+        if axis == 'x':
+            center = self.data.shape[1] // 2
+        else:
+            center = self.data.shape[0] // 2
+        for line_nr in range(center - 20, center + 20, 3):
             if axis == 'x':
-                center = self.data.shape[1] // 2        
+                line = self.data[line_nr, :]
             else:
-                center = self.data.shape[1] // 2        
-            for line_nr in range(center - 20, center + 20, 3):
-                if axis == 'x':
-                    line = self.data[line_nr, :]
-                else:
-           start, end = self._find_rupture_points(y_line, plot=False)
-           if (start, end) in found_endpoints:
-               found_endpoints[(start, end)] += 1
-           else:
-               found_endpoints[(start, end)] = 1
-       max_count = 0
-       for end_points, count in found_endpoints.items():
-           if count > max_count:
-               found_endpoints = end_points
-               max_count = count
-            
-        
-        found_endpoints = {}
-        y_center = self.data.shape[0] // 2        
-        # TODO: MULTIPROCESSING!!!!!!!!!!!!
-        for y_line_nr in range(y_center - 20, y_center + 20, 3):
-            y_line = self.data[:, y_line_nr]
-            start, end = self._find_rupture_points(y_line, plot=False)
+                line = self.data[:, line_nr]
+            start, end = self._find_rupture_points(line, plot=False)
             if (start, end) in found_endpoints:
                 found_endpoints[(start, end)] += 1
             else:
                 found_endpoints[(start, end)] = 1
-        max_count = 0
-        for end_points, count in found_endpoints.items():
-            if count > max_count:
-                found_endpoints = end_points
-                max_count = count
-        found_endpoints_y = found_endpoints
-       
-        found_endpoints = {}
-        x_center = self.data.shape[1] // 2        
-        # TODO: MULTIPROCESSING!!!!!!!!!!!!
-        for x_line_nr in range(x_center - 20, x_center + 20, 3):
-            x_line = self.data[x_line_nr, :]
-            start, end = self._find_rupture_points(x_line, plot=False)
-            if (start, end) in found_endpoints:
-                found_endpoints[(start, end)] += 1
-            else:
-                found_endpoints[(start, end)] = 1
-        max_count = 0
-        for end_points, count in found_endpoints.items():
-            if count > max_count:
-                found_endpoints = end_points
-                max_count = count
-        found_endpoints_x = found_endpoints
 
+        max_count = 0
+        for end_points, count in found_endpoints.items():
+            if count > max_count:
+                actual_endpoints = end_points
+                max_count = count
+        return actual_endpoints
+
+    def find_modulated_area(self, plot=False):
+        # TODO: MULTIPROCESSING!!!!!!!!!!!!
+        # These fits can be done in parallel
+        found_endpoints_x = self._find_axis_endpoints('x')
+        found_endpoints_y = self._find_axis_endpoints('y')
         area = self._index_to_area(
             found_endpoints_x[0],
             found_endpoints_x[1],
