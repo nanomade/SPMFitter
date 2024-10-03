@@ -37,7 +37,7 @@ class SPMFitter:
         # self.original_data = sp.ndimage.rotate(self.original_data, 1.3)  # AFM
         self.original_data = sp.ndimage.rotate(self.original_data, 0)  # NF
 
-        self.patterend_region = None
+        self.patterend_region = None  # Todo: This will be replaced by a 'selected area'
         self.modulated_region = None
 
         # List of data treatments that has been applied to the raw data
@@ -60,6 +60,8 @@ class SPMFitter:
         return file_data, (x_size, y_size)
 
     def _find_all_medians(self):
+        # TODO: Do this only on 'selected area'. Doing it globally 
+        # does not work on modulation orders higher than 1
         medians = np.ones((self.data.shape[0], self.data.shape[1]))
         medians[2,:] = 2
         for line_nr in range(0, len(self.data)):
@@ -156,24 +158,6 @@ class SPMFitter:
             plt.show()
         return z
 
-    # def _find_modulated_lines(self):
-    #     """
-    #     THIS IS MOST LIKELY NOW OBSELETE. RUPTURES CAN DO BETTER AND THIS IS
-    #     HIGHLY SENSITIVE TO NOICE AN IRREGULARITIES OUTSIDE OF MAIN AREA
-    #     Find the modulated lines by comparing standard deviation of all lines,
-    #     if it is higher than average, it is should be part of the modulation
-    #     """
-    #     stds = np.empty(len(self.data))
-    #     for line_nr in range(0, len(self.data)):
-    #         stds[line_nr] = self.data[line_nr][:][:].std()
-
-    #     mean_std = stds.mean()
-    #     modulated_lines = []
-    #     for line_nr in range(0, len(self.data)):
-    #         if stds[line_nr] > mean_std * 0.9:
-    #             modulated_lines.append(line_nr)
-    #     return modulated_lines
-
     def _index_to_area(self, x_l, x_r, y_t, y_b):
         low_left = (
             (1e6 * x_l * self.size[0] / self.data.shape[1]),
@@ -184,84 +168,6 @@ class SPMFitter:
             (self.data.shape[0] - y_t) * 1e6 * self.size[1] / self.data.shape[0],
         )
         return (low_left, top_right)
-
-    # def _fit_hat_to_line(self, line_nr, plot):
-    #     """
-    #     MOST LIKELY THIS CAN ALSO BE REPLACED BY RUPTURES!!!!!!!!!!!!!
-    #     Algorithm for identify if a line is patterned:
-    #     - Fit a straight line and correct for overall slope
-    #     - Make a list of delta-z's. If the line contains a step, this should
-    #       represent the largest postive and negative values in the line.
-    #     - If the with of the hat is small; disregard the line, otherwise proceed
-    #     - Using the guess found above; try to fit a top-hat function to the line;
-    #     - if the hat is a real hat (ie. ampitude is high compared to interline noise),
-    #       the line is assumed to be a patterned line. Line number and edges are
-    #       returned.
-    #     """
-    #     line = self.data[line_nr][:][:]
-    #     X = np.arange(0, len(line))
-    #     z = np.polyfit(X, line, 1)
-    #     # Correct for overall slope:
-    #     line = line - (X * z[0] + z[1])
-
-    #     delta_zs = []
-    #     for i in range(2, len(line)):
-    #         delta_z = line[i] - line[i - 2]
-    #         delta_zs.append(delta_z)
-    #     hat_start = np.argmax(delta_zs)
-    #     hat_stop = np.argmin(delta_zs)
-    #     if (hat_stop - hat_start) < len(line) / 2:
-    #         # This hat is obiously too small, not a patterned area
-    #         return
-
-    #     low_part = np.append(line[:hat_start], line[hat_stop:])
-    #     high_part = line[hat_start:hat_stop]
-    #     p0 = [hat_start, hat_stop, np.mean(low_part), np.mean(high_part)]
-
-    #     # Fit the hat as good as possible. Notice that the fit is unable to catch
-    #     # the non-monotomic hat kink, this is hopefully correctly catched by
-    #     # the initial guess if this is a patterned region
-    #     fit = sp.optimize.least_squares(
-    #         fit_functions.top_hat_error_func, p0[:], args=(X, line), **FIT_PARAMS
-    #     )
-
-    #     hat_amplitude = fit.x[3] - fit.x[2]
-    #     line_amplitude = line.max() - line.min()
-
-    #     if hat_amplitude / line_amplitude < 0.25:
-    #         return
-
-    #     if plot:
-    #         fig = plt.figure()
-    #         ax = fig.add_subplot(1, 1, 1)
-    #         ax.plot(line, 'r.', label='Data')
-    #         ax.plot(X, fit_functions.top_hat(p0, X, line), 'b-', label='Init')
-    #         plt.show()
-    #     return hat_start, hat_stop, line_nr
-
-    def find_patterned_area(self, plot=False):
-        """
-        Locate the patterned area of the sample. This is done by fitting a top-hat
-        function to every line. The fit will not work pefectly for modulated areas
-        but should work quite well outside this. Since the area is a super-set of
-        the modulated area, the corners should be correct.
-        """
-        patterned_lines = []
-        left_edges = []
-        right_edges = []
-        for line_nr in range(0, len(self.data)):
-            hat = self._fit_hat_to_line(line_nr, plot)
-            if hat:
-                patterned_lines.append(line_nr)
-                left_edges.append(hat[0])
-                right_edges.append(hat[1])
-
-        left_edge = sorted(left_edges)[int(len(left_edges) * 0.2)]
-        right_edge = sorted(right_edges)[int(len(right_edges) * 0.8)]
-        area = self._index_to_area(
-            left_edge, right_edge, patterned_lines[0], patterned_lines[-1]
-        )
-        return area
 
     def _find_rupture_points(self, line, plot=False):
         # We know this line has exactly two jumps => Dynp is a good model
