@@ -428,8 +428,7 @@ class SPMFitter:
 if __name__ == "__main__":
     # TODO:
     # - Make line fit much more robust
-    # - Handle case with and without a patterned non-modulated area
-    # - Implement ruptures to find the modulated area
+    # - Remove referenes to patterned-non-modulates-area
     # - Handle rotation automatically
     # - Deal correctly with non-square images
     
