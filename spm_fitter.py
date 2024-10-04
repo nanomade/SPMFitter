@@ -78,15 +78,17 @@ class SPMFitter:
         If True, the result will be the full area with the area masked by nan
         :return: The sub-area or masked full area as
         """
-        left_x = int(1e-6 * area[0][0] * self.data.shape[0] / self.size[0])
-        right_x = int(1e-6 * area[1][0] * self.data.shape[0] / self.size[0])
+        # NOTICE: shape and size has different x-y convention!!!!!!!!!
+        left_x = int(1e-6 * area[0][0] * self.data.shape[1] / self.size[0])
+        right_x = int(1e-6 * area[1][0] * self.data.shape[1] / self.size[0])
+
         # A small poll in the office puts (0,0) in lower left corner
         # even though Gwiddion actually defaults to upper left corner
         low_y = int(
-            self.data.shape[1] - (1e-6 * area[1][1] * self.data.shape[1] / self.size[1])
+            self.data.shape[0] - (1e-6 * area[1][1] * self.data.shape[0] / self.size[1])
         )
         top_y = int(
-            self.data.shape[1] - (1e-6 * area[0][1] * self.data.shape[1] / self.size[1])
+            self.data.shape[0] - (1e-6 * area[0][1] * self.data.shape[0] / self.size[1])
         )
         # print('Lx: ', left_x, '  Rx: ', right_x, '  Ly: ', low_y, ' Ty: ', top_y)
 
@@ -355,7 +357,8 @@ class SPMFitter:
 
         fit = None
         values = []
-        for line_nr in range(0, data.shape[0]):
+        # for line_nr in range(0, data.shape[0]):
+        for line_nr in range(0, 40):
             line = data[line_nr][:][:]
 
             # TODO: After gettings fit parameters from the first few fits, we could
@@ -445,6 +448,20 @@ if __name__ == "__main__":
     
     # FITTER.apply_plane_fit()
     area = FITTER.find_modulated_area(plot=False)
+    # area = ((1.02, 0.5100000000000001), (6.120000000000001, 5.610000000000001))
+    print(area)
+    
+    data = FITTER._find_sub_area(area)
+    
+    fig, ax = plt.subplots()
+    plot = ax.imshow(
+        data,
+        interpolation='none',
+        origin='upper',
+    )
+    plt.show()
+    
+    # FITTER.fit_to_all_lines(parameter='offset', area=area, plot=False)
     # print(area)
 
  
