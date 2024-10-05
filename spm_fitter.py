@@ -220,13 +220,17 @@ class SPMFitter:
     def find_modulated_area(self, plot=False):
         # TODO: MULTIPROCESSING!!!!!!!!!!!!
         # These fits can be done in parallel
+        
+        shrink_size = 3  # Shrink the found area a bit to ensure we get
+        # only modulated data and not the transition area
+        
         found_endpoints_x = self._find_axis_endpoints('x', plot)
         found_endpoints_y = self._find_axis_endpoints('y', plot)
         area = self._index_to_area(
-            found_endpoints_x[0],
-            found_endpoints_x[1],
-            found_endpoints_y[0],
-            found_endpoints_y[1],
+            found_endpoints_x[0] + shrink_size,
+            found_endpoints_x[1] - shrink_size,
+            found_endpoints_y[0] + shrink_size,
+            found_endpoints_y[1] - shrink_size,
         )
         return area
 
@@ -248,19 +252,36 @@ class SPMFitter:
         return True
 
     def fit_line(self, line, p0=None, pdfpage=None):
-        dt = self.size[0] / len(self.original_data[0][:])
+        dt = self.size[0] / self.data.shape[1]  # m / pixel
         X = np.arange(0, len(line))
 
-        if p0 is None:
-            peaks, _ = sp.signal.find_peaks(line, distance=20)
-            # A decent guess for frequency is to distribute all peaks acress the line
-            freq_guess = len(peaks) * 2 * np.pi / len(line)
-            # We fit a sine, zero should be a quater period offset
-            phase_guess = peaks[0] - (peaks[1] - peaks[0]) / 4
+        z_mean = sum(line) / len(line)
+        fft = abs(sp.fft.fft(line - z_mean))
+        xf = sp.fft.fftfreq(len(line), dt)[:len(fft)//2]
+        
+        # fig = plt.figure()
+        # ax = fig.add_subplot(1, 1, 1)
+        # ax.plot(xf, fft[:len(fft)//2], 'r+', label='Data')
+        # plt.show()
+
+        if p0 is None:            
             # Amplitude guess is simply max minus min
-            z_mean = sum(line) / len(line)
-            ampl_guess = max(line) - z_mean
-            p0 = [ampl_guess, freq_guess, phase_guess, z_mean, 0]
+            ampl_guess = (max(line) - min(line)) / 2            
+            freq_guess = 2 * np.pi * xf[np.argmax(fft)] * dt
+
+            # Estimate the phase guess:
+            error_min = 99999999999
+            phase_guesses = [
+                0,
+                np.arcsin( (line[0] - z_mean) / ampl_guess) + np.pi,
+                np.arcsin( (line[0] - z_mean) / ampl_guess),
+            ]
+            for phase_guess in phase_guesses:
+                p_test = [ampl_guess, freq_guess, phase_guess, z_mean, 0]
+                error = sum((line - fit_functions.sine_fit_func(p_test, X))**2)
+                if error < error_min:
+                    error_min = error
+                    p0 = p_test
 
         fit = sp.optimize.least_squares(
             fit_functions.sine_error_func, p0[:], args=(X, line), **FIT_PARAMS
@@ -357,8 +378,8 @@ class SPMFitter:
 
         fit = None
         values = []
-        # for line_nr in range(0, data.shape[0]):
-        for line_nr in range(0, 40):
+        # for line_nr in range(0, 1):
+        for line_nr in range(0, data.shape[0]):
             line = data[line_nr][:][:]
 
             # TODO: After gettings fit parameters from the first few fits, we could
@@ -447,22 +468,22 @@ if __name__ == "__main__":
     FITTER = SPMFitter('sample_images/camilla_thesis_nf.gwy')
     
     # FITTER.apply_plane_fit()
-    area = FITTER.find_modulated_area(plot=False)
+    # area = FITTER.find_modulated_area(plot=False)
     # area = ((1.02, 0.5100000000000001), (6.120000000000001, 5.610000000000001))
+    area = ((1.08, 0.54), (6.0600000000000005, 5.580000000000001))
     print(area)
     
     data = FITTER._find_sub_area(area)
     
-    fig, ax = plt.subplots()
-    plot = ax.imshow(
-        data,
-        interpolation='none',
-        origin='upper',
-    )
-    plt.show()
+    # fig, ax = plt.subplots()
+    # plot = ax.imshow(
+    #     data,
+    #     interpolation='none',
+    #     origin='upper',
+    # )
+    # plt.show()
     
-    # FITTER.fit_to_all_lines(parameter='offset', area=area, plot=False)
-    # print(area)
+    FITTER.fit_to_all_lines(parameter='offset', area=area, plot=False)
 
  
  
