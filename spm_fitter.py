@@ -283,7 +283,6 @@ class SPMFitter:
                 fit=fit,
                 dt=dt,
                 p0=p0,
-                xf=xf,
                 fft=fft,
                 fit_params=fit_params,
             )
@@ -301,10 +300,8 @@ class SPMFitter:
 
         fit = None
         values = []
-        for line_nr in range(0, 1):
-            #for line_nr in range(0, data.shape[0]):
+        for line_nr in range(0, data.shape[0]):
             line = data[line_nr][:][:]
-
             # TODO: After gettings fit parameters from the first few fits, we could
             # gain a significant performance boost by funneling the rest of the
             # fits into a multi-process queue
