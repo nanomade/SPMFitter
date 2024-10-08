@@ -341,31 +341,50 @@ class SPMFitter:
             **constants.FIT_PARAMS
         )
         print(fit)
+        data = data - fit.x[3]
 
         init_data = np.ones((data.shape[0], data.shape[1]))
         for j in np.arange(0, data.shape[1]):
             init_data[:, j] = fit_functions.sine_fit_func(p0, j)
 
+        fit.x[3] = 0
         fit_data = np.ones((data.shape[0], data.shape[1]))
         for j in range(0, data.shape[1]):
             fit_data[:, j] = fit_functions.sine_fit_func(fit.x, j)
 
         if plot:
             fig = plt.figure()
-            ax = fig.add_subplot(1, 3, 1)
+
+            ax = fig.add_subplot(2, 3, 1)
             d = ax.imshow(data, interpolation='none', origin='upper')
             d.set_clim(data.min(), data.max())
             fig.colorbar(d)
 
-            ax = fig.add_subplot(1, 3, 2)
+            ax = fig.add_subplot(2, 3, 2)
             f = ax.imshow(fit_data, interpolation='none', origin='upper')
             f.set_clim(data.min(), data.max())
             fig.colorbar(f)
 
-            ax = fig.add_subplot(1, 3, 3)
+            ax = fig.add_subplot(2, 3, 3)
             r = ax.imshow(data - fit_data, interpolation='none', origin='upper')
             r.set_clim(data.min(), data.max())
             fig.colorbar(r)
+
+            ax = fig.add_subplot(2, 3, 4)
+            d = ax.imshow(data, interpolation='none', origin='upper')
+            #d.set_clim(data.min(), data.max())
+            fig.colorbar(d)
+
+            ax = fig.add_subplot(2, 3, 5)
+            f = ax.imshow(fit_data, interpolation='none', origin='upper')
+            # f.set_clim(data.min(), data.max())
+            fig.colorbar(f)
+
+            ax = fig.add_subplot(2, 3, 6)
+            r = ax.imshow(data - fit_data, interpolation='none', origin='upper')
+            #r.set_clim(data.min(), data.max())
+            fig.colorbar(r)
+
         plt.show()
 
 
@@ -390,7 +409,6 @@ if __name__ == '__main__':
     # FITTER = SPMFitter('sample_images/camilla_thesis_afm.gwy')
     FITTER = SPMFitter('sample_images/camilla_thesis_nf.gwy')
 
-    # FITTER.apply_plane_fit()
     # area = FITTER.find_modulated_area(plot=False)
     # area = ((1.02, 0.5100000000000001), (6.120000000000001, 5.610000000000001))
     area = ((1.08, 0.54), (6.0600000000000005, 5.580000000000001))
@@ -406,4 +424,6 @@ if __name__ == '__main__':
     # )
     # plt.show()
 
-    FITTER.fit_to_all_lines(parameter='offset', area=area, plot=False)
+    # FITTER.fit_to_all_lines(parameter='offset', area=area, plot=False)
+    FITTER.apply_plane_fit(area=area, mask=True, plot=False)
+    FITTER.sinosodial_fit_area(area=area, plot=True)
