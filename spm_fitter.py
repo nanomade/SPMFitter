@@ -371,16 +371,19 @@ class SPMFitter:
 
 if __name__ == '__main__':
     # TODO:
-    # - Make line fit much more robust
     # - Remove referenes to patterned-non-modulates-area
     # - Handle rotation automatically
-    # - Deal correctly with non-square images
-
     # - Significantly increase test-coverage
-    # - Fix y-axis on pdf export of fits to ensure shared y-axis
-    # - FFT of residuals on line fits
     # - Estimate uncertainty on roughness
     # - Establish unit-tests to keep regressions in check
+    # - If pdf is exported, include pages with summary plots in the end
+    # - Perform median alignment on non-patterned area only
+
+    # Done:
+    # - Make line fit much more robust
+    # - FFT of residuals on line fits
+    # - Fix y-axis on pdf export of fits to ensure shared y-axis
+    # - Deal correctly with non-square images
 
     # FITTER = SPMFitter('F1.002.gwy')
     # FITTER = SPMFitter('10_40_29_WR_sin2n_500nm_20px_15x10um_20nm_1050C.gwy')
