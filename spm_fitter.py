@@ -1,31 +1,15 @@
 import multiprocessing  # To be used for faster fitting
 
 import gwyfile
-import ruptures as rpt 
+import ruptures as rpt
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
+import constants
 import fit_functions
-
-TICK_PARMAMS = {  # This should go to a file with defaults
-    'direction': 'in',
-    'length': 3,
-    'width': 1,
-    'colors': 'k',
-    'labelsize': 5,
-    'axis': 'both',
-    'pad': 2,
-}
-
-FIT_PARAMS = {
-    'method': 'lm',
-    'jac': '2-point',
-    'ftol': 1e-14,
-    'xtol': 1e-14,
-    'max_nfev': 20000,
-}
+import plot_helpers
 
 
 class SPMFitter:
@@ -60,14 +44,14 @@ class SPMFitter:
         return file_data, (x_size, y_size)
 
     def _find_all_medians(self):
-        # TODO: Do this only on 'selected area'. Doing it globally 
+        # TODO: Do this only on 'selected area'. Doing it globally
         # does not work on modulation orders higher than 1
         medians = np.ones((self.data.shape[0], self.data.shape[1]))
-        medians[2,:] = 2
+        medians[2, :] = 2
         for line_nr in range(0, len(self.data)):
             line = self.data[line_nr][:][:]
             median = np.median(line)
-            medians[line_nr,:] = median
+            medians[line_nr, :] = median
         return medians
 
     def _find_sub_area(self, area, mask=False):
@@ -181,7 +165,7 @@ class SPMFitter:
         start_fit = result[0]
         # result[-1] is pr definition the last point
         end_fit = result[-2]
-        print('start: {}, end: {}'.format(start_fit, end_fit))
+        print("start: {}, end: {}".format(start_fit, end_fit))
 
         if plot:
             fig = plt.figure()
@@ -220,10 +204,10 @@ class SPMFitter:
     def find_modulated_area(self, plot=False):
         # TODO: MULTIPROCESSING!!!!!!!!!!!!
         # These fits can be done in parallel
-        
+
         shrink_size = 3  # Shrink the found area a bit to ensure we get
         # only modulated data and not the transition area
-        
+
         found_endpoints_x = self._find_axis_endpoints('x', plot)
         found_endpoints_y = self._find_axis_endpoints('y', plot)
         area = self._index_to_area(
@@ -241,13 +225,13 @@ class SPMFitter:
 
     def apply_plane_fit(self, area=None, mask=False, plot=True):
         fitted_plane = self._plane_fit(area, mask=mask, plot=plot)
-        self.treatments.append('Subtract global plane fit')
+        self.treatments.append("Subtract global plane fit")
         self.data = self.data - fitted_plane
         return True
 
     def apply_median_alignment(self):
         medians = self._find_all_medians()
-        self.treatments.append('Median alignment')
+        self.treatments.append("Median alignment")
         self.data = self.data - medians
         return True
 
@@ -257,34 +241,29 @@ class SPMFitter:
 
         z_mean = sum(line) / len(line)
         fft = abs(sp.fft.fft(line - z_mean))
-        xf = sp.fft.fftfreq(len(line), dt)[:len(fft)//2]
-        
-        # fig = plt.figure()
-        # ax = fig.add_subplot(1, 1, 1)
-        # ax.plot(xf, fft[:len(fft)//2], 'r+', label='Data')
-        # plt.show()
+        xf = sp.fft.fftfreq(len(line), dt)[: len(fft) // 2]
 
-        if p0 is None:            
+        if p0 is None:
             # Amplitude guess is simply max minus min
-            ampl_guess = (max(line) - min(line)) / 2            
+            ampl_guess = (max(line) - min(line)) / 2
             freq_guess = 2 * np.pi * xf[np.argmax(fft)] * dt
 
             # Estimate the phase guess:
             error_min = 99999999999
             phase_guesses = [
                 0,
-                np.arcsin( (line[0] - z_mean) / ampl_guess) + np.pi,
-                np.arcsin( (line[0] - z_mean) / ampl_guess),
+                np.arcsin((line[0] - z_mean) / ampl_guess) + np.pi,
+                np.arcsin((line[0] - z_mean) / ampl_guess),
             ]
             for phase_guess in phase_guesses:
                 p_test = [ampl_guess, freq_guess, phase_guess, z_mean, 0]
-                error = sum((line - fit_functions.sine_fit_func(p_test, X))**2)
+                error = sum((line - fit_functions.sine_fit_func(p_test, X)) ** 2)
                 if error < error_min:
                     error_min = error
                     p0 = p_test
 
         fit = sp.optimize.least_squares(
-            fit_functions.sine_error_func, p0[:], args=(X, line), **FIT_PARAMS
+            fit_functions.sine_error_func, p0[:], args=(X, line), **constants.FIT_PARAMS
         )
 
         fit_params = {}
@@ -298,73 +277,17 @@ class SPMFitter:
             }
 
         if pdfpage:
-            print(fit)
-            fig = plt.figure()
-            fig.subplots_adjust(right=0.75)
-            ax = fig.add_subplot(2, 1, 1)
-            ax.set_xlabel('Distance / μm', fontsize=6)
-            ax.set_ylabel('Height / nm', fontsize=6)
-            # for peak in peaks:
-            #    ax.plot(peak, line[peak], 'bo')
-            ax.plot(1e6 * dt * X, 1e9 * line, 'r+', label='Data')
-            ax.plot(
-                1e6 * dt * X,
-                1e9 * fit_functions.sine_fit_func(p0, X),
-                linewidth=0.2,
-                label='Initial function',
+            plot_helpers.write_line_fit_pdf_page(
+                pdfpage,
+                line=line,
+                fit=fit,
+                dt=dt,
+                p0=p0,
+                xf=xf,
+                fft=fft,
+                fit_params=fit_params,
             )
-            ax.plot(
-                1e6 * dt * X,
-                1e9 * fit_functions.sine_fit_func(fit.x, X),
-                label='Fitted function',
-            )
-            ax.tick_params(**TICK_PARMAMS)
-            ax.yaxis.get_offset_text().set_size(6)
-            ax.xaxis.get_offset_text().set_size(6)
-            # plt.legend()
 
-            texts = [
-                ('Amplitude (A): {:.2f}nm', 'amplitude'),
-                ('Frequency (F): {:.2f}rad/μm', 'frequency'),
-                ('Phase (P): {:.1f}nm', 'phase'),
-                ('Offset (O): {:.1f}nm', 'offset'),
-                ('Slope (S): {:.1f} nm/μm', 'slope'),
-            ]
-            for i in range(0, len(texts)):
-                key = texts[i][1]
-                msg = texts[i][0].format(fit_params.get(key, -1))
-                ax.text(1.01, 1.0 - i * 0.07, msg, fontsize=6, transform=ax.transAxes)
-
-            msg = 'Fit function:'
-            ax.text(1.01, 0.6, msg, fontsize=6, transform=ax.transAxes)
-            func = 'Asin(Fx + P) + O + Sx'
-            ax.text(1.01, 0.54, func, fontsize=6, transform=ax.transAxes)
-
-            msg = 'Optimality: {:.2e}'.format(fit.optimality)
-            ax.text(1.01, 0.3, msg, fontsize=6, transform=ax.transAxes)
-            msg = 'Iterations: {}'.format(fit.nfev)
-            ax.text(1.01, 0.23, msg, fontsize=6, transform=ax.transAxes)
-            msg = 'Success: {}.'.format(fit.success)
-            ax.text(1.01, 0.16, msg, fontsize=6, transform=ax.transAxes)
-            msg = 'Message:'
-            ax.text(1.01, 0.09, msg, fontsize=6, transform=ax.transAxes)
-            msg = '{}'.format(fit.message)
-            ax.text(1.01, 0.02, msg, fontsize=6, transform=ax.transAxes)
-
-            ax = fig.add_subplot(2, 1, 2)
-            ax.set_xlabel('Distance / μm', fontsize=6)
-            ax.set_ylabel('Residual / nm', fontsize=6)
-            ax.plot(
-                1e6 * dt * X,
-                1e9 * (fit_functions.sine_fit_func(fit.x, X) - line),
-                label='Residual',
-            )
-            ax.tick_params(**TICK_PARMAMS)
-            ax.xaxis.get_offset_text().set_size(6)
-            ax.yaxis.get_offset_text().set_size(6)
-
-            plt.savefig(pdfpage, format='pdf')
-            plt.close()
         return fit_params, fit
 
     def fit_to_all_lines(self, parameter, area=None, plot=False):
@@ -378,8 +301,8 @@ class SPMFitter:
 
         fit = None
         values = []
-        # for line_nr in range(0, 1):
-        for line_nr in range(0, data.shape[0]):
+        for line_nr in range(0, 1):
+            #for line_nr in range(0, data.shape[0]):
             line = data[line_nr][:][:]
 
             # TODO: After gettings fit parameters from the first few fits, we could
@@ -404,7 +327,7 @@ class SPMFitter:
 
     def sinosodial_fit_area(self, area, plot=False):
         if area is None:
-            print('You need to select an area')
+            print("You need to select an area")
             return
         data = self._find_sub_area(area)
 
@@ -418,7 +341,7 @@ class SPMFitter:
             fit_functions.sine_error_func,
             p0[:],
             args=(X.flatten(), data.flatten()),
-            **FIT_PARAMS
+            **constants.FIT_PARAMS
         )
         print(fit)
 
@@ -449,13 +372,13 @@ class SPMFitter:
         plt.show()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     # TODO:
     # - Make line fit much more robust
     # - Remove referenes to patterned-non-modulates-area
     # - Handle rotation automatically
     # - Deal correctly with non-square images
-    
+
     # - Significantly increase test-coverage
     # - Fix y-axis on pdf export of fits to ensure shared y-axis
     # - FFT of residuals on line fits
@@ -466,15 +389,15 @@ if __name__ == "__main__":
     # FITTER = SPMFitter('10_40_29_WR_sin2n_500nm_20px_15x10um_20nm_1050C.gwy')
     # FITTER = SPMFitter('sample_images/camilla_thesis_afm.gwy')
     FITTER = SPMFitter('sample_images/camilla_thesis_nf.gwy')
-    
+
     # FITTER.apply_plane_fit()
     # area = FITTER.find_modulated_area(plot=False)
     # area = ((1.02, 0.5100000000000001), (6.120000000000001, 5.610000000000001))
     area = ((1.08, 0.54), (6.0600000000000005, 5.580000000000001))
     print(area)
-    
+
     data = FITTER._find_sub_area(area)
-    
+
     # fig, ax = plt.subplots()
     # plot = ax.imshow(
     #     data,
@@ -482,8 +405,5 @@ if __name__ == "__main__":
     #     origin='upper',
     # )
     # plt.show()
-    
-    FITTER.fit_to_all_lines(parameter='offset', area=area, plot=False)
 
- 
- 
+    FITTER.fit_to_all_lines(parameter='offset', area=area, plot=False)
