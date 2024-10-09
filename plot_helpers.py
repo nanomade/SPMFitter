@@ -14,7 +14,41 @@ def _format_ax(ax, x_label, y_label):
     ax.xaxis.get_offset_text().set_size(5)
 
 
-# REMOVE XF!!!!!!!!!!!!!!!!!!1
+def show_2d_plot(data, fit_data):
+    fig = plt.figure()
+
+    ax = fig.add_subplot(2, 3, 1)
+    d = ax.imshow(data, interpolation='none', origin='upper')
+    d.set_clim(data.min(), data.max())
+    fig.colorbar(d)
+
+    ax = fig.add_subplot(2, 3, 2)
+    f = ax.imshow(fit_data, interpolation='none', origin='upper')
+    f.set_clim(data.min(), data.max())
+    fig.colorbar(f)
+
+    ax = fig.add_subplot(2, 3, 3)
+    r = ax.imshow(data - fit_data, interpolation='none', origin='upper')
+    r.set_clim(data.min(), data.max())
+    fig.colorbar(r)
+
+    ax = fig.add_subplot(2, 3, 4)
+    d = ax.imshow(data, interpolation='none', origin='upper')
+    #d.set_clim(data.min(), data.max())
+    fig.colorbar(d)
+
+    ax = fig.add_subplot(2, 3, 5)
+    f = ax.imshow(fit_data, interpolation='none', origin='upper')
+    # f.set_clim(data.min(), data.max())
+    fig.colorbar(f)
+
+    ax = fig.add_subplot(2, 3, 6)
+    r = ax.imshow(data - fit_data, interpolation='none', origin='upper')
+    #r.set_clim(data.min(), data.max())
+    fig.colorbar(r)
+
+    plt.show()
+
 def write_line_fit_pdf_page(pdfpage, line, fit, dt, p0, fft, fit_params):
     X = np.arange(0, len(line))
 
