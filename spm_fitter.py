@@ -323,6 +323,8 @@ class SPMFitter:
         return values
 
     def sinosodial_fit_area(self, area, plot=False):
+        # This is 2-dimensional extention of the 1D fit, ie, all data is fitted
+        # but the fit does not have a y-dependance
         if area is None:
             print("You need to select an area")
             return
@@ -333,6 +335,7 @@ class SPMFitter:
         # We need a good guess for p0; fit_line actually is quite decent at guessing
         # ab-initio, so we simply pick a random line as starting guess for the 2d-fit
         _, line_fit = self.fit_line(data[2][:][:])
+
         p0 = line_fit.x
         fit = sp.optimize.least_squares(
             fit_functions.sine_error_func,
@@ -340,52 +343,21 @@ class SPMFitter:
             args=(X.flatten(), data.flatten()),
             **constants.FIT_PARAMS
         )
-        print(fit)
+
+        # Subtract mean value to avoid messing up the auto-scale
         data = data - fit.x[3]
+        fit.x[3] = 0
 
         init_data = np.ones((data.shape[0], data.shape[1]))
         for j in np.arange(0, data.shape[1]):
             init_data[:, j] = fit_functions.sine_fit_func(p0, j)
 
-        fit.x[3] = 0
         fit_data = np.ones((data.shape[0], data.shape[1]))
         for j in range(0, data.shape[1]):
             fit_data[:, j] = fit_functions.sine_fit_func(fit.x, j)
 
         if plot:
-            fig = plt.figure()
-
-            ax = fig.add_subplot(2, 3, 1)
-            d = ax.imshow(data, interpolation='none', origin='upper')
-            d.set_clim(data.min(), data.max())
-            fig.colorbar(d)
-
-            ax = fig.add_subplot(2, 3, 2)
-            f = ax.imshow(fit_data, interpolation='none', origin='upper')
-            f.set_clim(data.min(), data.max())
-            fig.colorbar(f)
-
-            ax = fig.add_subplot(2, 3, 3)
-            r = ax.imshow(data - fit_data, interpolation='none', origin='upper')
-            r.set_clim(data.min(), data.max())
-            fig.colorbar(r)
-
-            ax = fig.add_subplot(2, 3, 4)
-            d = ax.imshow(data, interpolation='none', origin='upper')
-            #d.set_clim(data.min(), data.max())
-            fig.colorbar(d)
-
-            ax = fig.add_subplot(2, 3, 5)
-            f = ax.imshow(fit_data, interpolation='none', origin='upper')
-            # f.set_clim(data.min(), data.max())
-            fig.colorbar(f)
-
-            ax = fig.add_subplot(2, 3, 6)
-            r = ax.imshow(data - fit_data, interpolation='none', origin='upper')
-            #r.set_clim(data.min(), data.max())
-            fig.colorbar(r)
-
-        plt.show()
+            plot_helpers.show_2d_plot(data, fit_data)
 
 
 if __name__ == '__main__':
